@@ -4,6 +4,7 @@ import { env } from "@/lib/env";
 import { ClipsPanel } from "./clips-panel";
 
 const VIDEO_PROVIDER_LABEL: Record<typeof env.VIDEO_PROVIDER, string> = {
+  fal: "Veo 3.1 Lite (fal)",
   "replicate-kling": "Kling 2.6",
   "replicate-ltx": "LTX-Video",
   "google-veo": "Veo 3 Fast",

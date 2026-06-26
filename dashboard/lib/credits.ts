@@ -14,12 +14,14 @@ export const COST = {
   clipKling:      40,    // Replicate kwaivgi/kling-v2.1 standard, $0.25/clip
   clipLTX:        10,    // Replicate lightricks/ltx-video, $0.05/clip
   clipVeo:       200,    // Google AI Studio Veo 3 Fast, ~$1.60/clip
+  clipFal:        20,    // fal.ai Veo 3.1 Lite, 4s muted, ~$0.20/clip
 } as const;
 
-export type VideoProvider = "replicate-kling" | "replicate-ltx" | "google-veo";
+export type VideoProvider = "fal" | "replicate-kling" | "replicate-ltx" | "google-veo";
 
 export function costForClip(provider: VideoProvider): number {
   switch (provider) {
+    case "fal":             return COST.clipFal;
     case "replicate-kling": return COST.clipKling;
     case "replicate-ltx":   return COST.clipLTX;
     case "google-veo":      return COST.clipVeo;

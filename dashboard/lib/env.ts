@@ -15,13 +15,25 @@ const schema = z.object({
   VEO_MODEL: z.string().min(1).default("veo-3.0-fast-generate-001"),
   VEO_DURATION_SECONDS: z.coerce.number().int().min(4).max(8).default(4),
 
-  // Video clip provider for Step 6. "replicate-ltx" is the default — cheap
-  // (~$0.05/clip), no rate-limit cliff. "google-veo" hits Google AI Studio's
-  // Veo 3 Fast (higher quality but 2 RPM / 9 RPD on the free key).
+  // Video clip provider for Step 6. "fal" is the cheap drop-in replacement for
+  // Google/Replicate: one key for image+video, ~$0.20/4s clip on Veo 3.1 Lite.
+  // "replicate-kling" is best face consistency; "replicate-ltx" cheapest on
+  // Replicate; "google-veo" hits Google AI Studio's Veo (2 RPM / 9 RPD free).
   VIDEO_PROVIDER: z
-    .enum(["replicate-kling", "replicate-ltx", "google-veo"])
-    .default("replicate-kling"),
+    .enum(["fal", "replicate-kling", "replicate-ltx", "google-veo"])
+    .default("fal"),
   REPLICATE_API_TOKEN: z.string().min(1).optional(),
+
+  // fal.ai — one key for images (Nano Banana 2) AND video (Veo 3.1 Lite).
+  // Used when VIDEO_PROVIDER=fal and/or IMAGE_PROVIDER=fal. SERVER ONLY.
+  FAL_KEY: z.string().min(1).optional(),
+  // Image provider for Step 4. "fal" = Nano Banana 2 on fal (default, ~$0.08/
+  // image, paid). "google" = Gemini Nano-banana (free tier) as a fallback.
+  IMAGE_PROVIDER: z.enum(["google", "fal"]).default("fal"),
+  // fal video endpoint + clip length + resolution (used when VIDEO_PROVIDER=fal).
+  FAL_VIDEO_MODEL: z.string().min(1).default("fal-ai/veo3.1/lite/image-to-video"),
+  FAL_DURATION_SECONDS: z.coerce.number().int().min(4).max(8).default(4),
+  FAL_RESOLUTION: z.enum(["720p", "1080p"]).default("720p"),
   // Community model on Replicate, so we must pin a `version` hash —
   // the `/v1/models/owner/name/predictions` endpoint only works for official
   // models. Format: `owner/name:version`.
@@ -47,6 +59,11 @@ const parsed = schema.safeParse({
   VIDEO_PROVIDER: process.env.VIDEO_PROVIDER,
   REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN,
   REPLICATE_LTX_MODEL: process.env.REPLICATE_LTX_MODEL,
+  FAL_KEY: process.env.FAL_KEY,
+  IMAGE_PROVIDER: process.env.IMAGE_PROVIDER,
+  FAL_VIDEO_MODEL: process.env.FAL_VIDEO_MODEL,
+  FAL_DURATION_SECONDS: process.env.FAL_DURATION_SECONDS,
+  FAL_RESOLUTION: process.env.FAL_RESOLUTION,
 });
 
 if (!parsed.success) {

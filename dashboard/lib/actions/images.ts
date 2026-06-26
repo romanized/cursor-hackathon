@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
 import { generateBeatImage, generateMascotImage } from "@/lib/providers/google";
+import { generateBeatImageFal } from "@/lib/providers/fal";
+import { env } from "@/lib/env";
 import { chargeCredits, COST } from "@/lib/credits";
 import { fitTo916 } from "@/lib/media/fit-916";
 import { seedStaticMascotIfNeeded } from "@/lib/mascot/static-mascot";
@@ -296,6 +298,45 @@ export async function generateBeatImages(projectId: string) {
   return { generated, skipped: beats.length - todo.length, errors };
 }
 
+// fal path for one beat image (Nano Banana 2). fal takes reference images as
+// public URLs, not base64 — so we upload the product/mascot bytes to a short-
+// lived storage path and sign them. Same consistency intent as the Google path.
+async function generateBeatImageWithFal(args: {
+  svc: ReturnType<typeof createService>;
+  userId: string;
+  projectId: string;
+  project: { template_id: string | null; product_name: string | null };
+  beat: { label: string | null; text: string; visual_prompt: string | null };
+  referenceImage: { bytes: Buffer; mimeType: string } | null;
+  mascotImage: { bytes: Buffer; mimeType: string } | null;
+}): Promise<{ bytes: Buffer; mimeType: string }> {
+  const { svc, userId, projectId, project, beat, referenceImage, mascotImage } = args;
+
+  // Upload byte refs → signed URLs fal can fetch. tmp/ so they're easy to GC.
+  const refUrls: string[] = [];
+  async function refToUrl(img: { bytes: Buffer; mimeType: string }, tag: string) {
+    const ext = img.mimeType.split("/")[1] ?? "png";
+    const path = `${userId}/${projectId}/tmp/falref-${tag}.${ext}`;
+    await svc.storage.from("media").upload(path, img.bytes, { contentType: img.mimeType, upsert: true });
+    const { data } = await svc.storage.from("media").createSignedUrl(path, 60 * 30);
+    if (data?.signedUrl) refUrls.push(data.signedUrl);
+  }
+  if (referenceImage) await refToUrl(referenceImage, "product");
+  if (mascotImage) await refToUrl(mascotImage, "mascot");
+
+  const scene = beat.visual_prompt?.trim() || `Visualize this voiceover beat: "${beat.text}"`;
+  const prompt = [
+    "UGC-style vertical short-form ad frame.",
+    project.product_name ? `Featured product: ${project.product_name}.` : "",
+    referenceImage ? "Keep the product (first reference image) identifiable and consistent." : "",
+    mascotImage ? "Keep the mascot character (reference image) design identical across scenes." : "",
+    `Scene: ${scene}`,
+    "Vertical portrait 9:16 (720×1280). No text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
+  ].filter(Boolean).join("\n\n");
+
+  return generateBeatImageFal({ prompt, referenceImageUrls: refUrls });
+}
+
 async function generateOneImage(args: {
   svc: ReturnType<typeof createService>;
   supabase: Awaited<ReturnType<typeof createClient>>;
@@ -315,20 +356,23 @@ async function generateOneImage(args: {
       beat_id: beat.id,
       kind: "image",
       status: "processing",
-      provider: "google:gemini-2.5-flash-image",
+      provider: env.IMAGE_PROVIDER === "fal" ? "fal:nano-banana-2" : "google:gemini-2.5-flash-image",
     } satisfies TablesInsert<"assets">)
     .select("id")
     .single();
   if (insErr || !assetRow) throw insErr ?? new Error("insert failed");
 
   try {
-    const { bytes, mimeType } = await generateBeatImage({
-      templateId: project.template_id,
-      productName: project.product_name,
-      beat: { label: beat.label, text: beat.text, visual_prompt: beat.visual_prompt },
-      referenceImage,
-      mascotImage,
-    });
+    const { bytes, mimeType } =
+      env.IMAGE_PROVIDER === "fal"
+        ? await generateBeatImageWithFal({ svc, userId, projectId, project, beat, referenceImage, mascotImage })
+        : await generateBeatImage({
+            templateId: project.template_id,
+            productName: project.product_name,
+            beat: { label: beat.label, text: beat.text, visual_prompt: beat.visual_prompt },
+            referenceImage,
+            mascotImage,
+          });
 
     const ext = mimeType.split("/")[1] ?? "png";
     const path = `${userId}/${projectId}/images/${beat.id}-ai.${ext}`;

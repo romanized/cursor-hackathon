@@ -11,9 +11,13 @@ import { advanceTo } from "@/lib/actions/projects";
 import { useAssetsRealtime, type RealtimeAsset } from "@/lib/hooks/use-assets-realtime";
 
 type Clip = RealtimeAsset;
-type VideoProvider = "replicate-kling" | "replicate-ltx" | "google-veo";
+type VideoProvider = "fal" | "replicate-kling" | "replicate-ltx" | "google-veo";
 
 const PROVIDER_COPY: Record<VideoProvider, { label: string; blurb: string }> = {
+  fal: {
+    label: "Generate motion clips with Veo 3.1 Lite",
+    blurb: "Veo 3.1 Lite on fal.ai, vertical 9:16, 4s per clip, muted. ~$0.20/clip. One key (FAL_KEY) also powers Nano Banana 2 images — pay-per-use, no rate-limit cliff.",
+  },
   "replicate-kling": {
     label: "Generate motion clips with Kling 2.6",
     blurb: "Kling v2.6 Pro on Replicate, vertical 9:16, 1080p / 24fps, 5s per clip. Best-in-class for character/face consistency across cuts. ~$0.25/clip, ~1–3 min per beat. Free Replicate tier (<$5 credit) is throttled to 6 RPM, so beats render sequentially.",

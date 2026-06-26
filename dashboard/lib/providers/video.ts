@@ -5,6 +5,7 @@ import {
   generateVideoFromImageKling,
   generateVideoFromImageLTX,
 } from "@/lib/providers/replicate";
+import { generateVideoFromImageFal } from "@/lib/providers/fal";
 
 /**
  * Provider-agnostic image-to-video. Defaults to LTX-Video on Replicate
@@ -23,6 +24,12 @@ export async function generateVideoFromImage(input: {
   durationSeconds?: number;
 }): Promise<{ bytes: Buffer; mimeType: string }> {
   switch (env.VIDEO_PROVIDER) {
+    case "fal":
+      return generateVideoFromImageFal({
+        imageUrl: input.imageUrl,
+        prompt: input.prompt,
+        durationSeconds: input.durationSeconds,
+      });
     case "replicate-kling":
       return generateVideoFromImageKling({
         imageUrl: input.imageUrl,
