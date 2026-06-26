@@ -118,62 +118,86 @@ export async function generateBeatImages(projectId: string) {
     hasReference: Boolean(referenceImage),
   });
 
+  // Each beat is independent → run them in parallel. The DB row flips
+  // processing → ready/failed per beat, and the client listens via Supabase
+  // Realtime so the UI updates as each result lands (not at the end).
+  const results = await Promise.allSettled(
+    todo.map((beat) => generateOneImage({
+      svc,
+      supabase,
+      userId: user.id,
+      projectId,
+      project,
+      beat,
+      referenceImage,
+    })),
+  );
+
   let generated = 0;
   const errors: Array<{ beat: number; error: string }> = [];
-
-  for (const beat of todo) {
-    // Insert a processing row first so the UI shows progress.
-    const { data: assetRow, error: insErr } = await supabase
-      .from("assets")
-      .insert({
-        project_id: projectId,
-        beat_id: beat.id,
-        kind: "image",
-        status: "processing",
-        provider: "google:gemini-2.5-flash-image",
-      } satisfies TablesInsert<"assets">)
-      .select("id")
-      .single();
-    if (insErr || !assetRow) {
-      errors.push({ beat: beat.idx, error: insErr?.message ?? "insert failed" });
-      continue;
-    }
-
-    try {
-      const { bytes, mimeType } = await generateBeatImage({
-        templateId: project.template_id,
-        productName: project.product_name,
-        beat: { label: beat.label, text: beat.text, visual_prompt: beat.visual_prompt },
-        referenceImage,
-      });
-
-      const ext = mimeType.split("/")[1] ?? "png";
-      const path = `${user.id}/${projectId}/images/${beat.id}-ai.${ext}`;
-      const { error: upErr } = await svc.storage.from("media").upload(path, bytes, {
-        contentType: mimeType,
-        upsert: true,
-      });
-      if (upErr) throw upErr;
-
-      const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
-
-      await supabase
-        .from("assets")
-        .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
-        .eq("id", assetRow.id);
-      generated += 1;
-      console.log("[generateBeatImages] ok", { beat: beat.idx, path });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await supabase
-        .from("assets")
-        .update({ status: "failed", error: msg })
-        .eq("id", assetRow.id);
-      errors.push({ beat: beat.idx, error: msg });
-      console.error("[generateBeatImages] failed", { beat: beat.idx, error: msg });
-    }
-  }
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") generated += 1;
+    else errors.push({ beat: todo[i].idx, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+  });
 
   revalidatePath(`/create/${projectId}/images`);
   return { generated, skipped: beats.length - todo.length, errors };
+}
+
+async function generateOneImage(args: {
+  svc: ReturnType<typeof createService>;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  projectId: string;
+  project: { template_id: string | null; product_name: string | null };
+  beat: { id: string; idx: number; label: string | null; text: string; visual_prompt: string | null };
+  referenceImage: { bytes: Buffer; mimeType: string } | null;
+}) {
+  const { svc, supabase, userId, projectId, project, beat, referenceImage } = args;
+
+  const { data: assetRow, error: insErr } = await supabase
+    .from("assets")
+    .insert({
+      project_id: projectId,
+      beat_id: beat.id,
+      kind: "image",
+      status: "processing",
+      provider: "google:gemini-2.5-flash-image",
+    } satisfies TablesInsert<"assets">)
+    .select("id")
+    .single();
+  if (insErr || !assetRow) throw insErr ?? new Error("insert failed");
+
+  try {
+    const { bytes, mimeType } = await generateBeatImage({
+      templateId: project.template_id,
+      productName: project.product_name,
+      beat: { label: beat.label, text: beat.text, visual_prompt: beat.visual_prompt },
+      referenceImage,
+    });
+
+    const ext = mimeType.split("/")[1] ?? "png";
+    const path = `${userId}/${projectId}/images/${beat.id}-ai.${ext}`;
+    const { error: upErr } = await svc.storage.from("media").upload(path, bytes, {
+      contentType: mimeType,
+      upsert: true,
+    });
+    if (upErr) throw upErr;
+
+    const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
+
+    await supabase
+      .from("assets")
+      .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
+      .eq("id", assetRow.id);
+    console.log("[generateBeatImages] ok", { beat: beat.idx, path });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await supabase
+      .from("assets")
+      .update({ status: "failed", error: msg })
+      .eq("id", assetRow.id);
+    console.error("[generateBeatImages] failed", { beat: beat.idx, error: msg });
+    throw e;
+  }
 }

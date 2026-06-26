@@ -9,21 +9,16 @@ import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { generateBeatImages, recordImageAsset } from "@/lib/actions/images";
 import { advanceTo } from "@/lib/actions/projects";
+import { useAssetsRealtime, type RealtimeAsset } from "@/lib/hooks/use-assets-realtime";
 
 type Beat = { id: string; idx: number; label: string | null; text: string; visual_prompt: string | null };
-type Asset = {
-  beat_id: string | null;
-  url: string | null;
-  storage_path: string | null;
-  status: "pending" | "processing" | "ready" | "failed";
-  error: string | null;
-};
+type Asset = RealtimeAsset;
 
 export function ImagesEditor({
   projectId,
   userId,
   beats,
-  assets,
+  assets: initialAssets,
 }: {
   projectId: string;
   userId: string;
@@ -32,6 +27,7 @@ export function ImagesEditor({
 }) {
   const router = useRouter();
   const supabase = createClient();
+  const assets = useAssetsRealtime<Asset>(projectId, "image", initialAssets);
   const [busyBeat, setBusyBeat] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [advancing, startAdvance] = useTransition();

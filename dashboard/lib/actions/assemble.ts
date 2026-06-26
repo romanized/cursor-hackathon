@@ -1,18 +1,18 @@
 "use server";
 
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
+import type { TablesInsert } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
-import type { TablesInsert } from "@/lib/db";
 
 const W = 720;
 const H = 1280;
@@ -21,7 +21,9 @@ const isVideoPath = (p: string) => /\.(mp4|webm|mov|m4v)$/i.test(p);
 
 async function requireUser() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   return { supabase, user };
 }
@@ -67,7 +69,9 @@ export async function assembleFinal(projectId: string) {
 
   // Stable beat order: rejoin to beats.idx (clips arrive in created_at order
   // which usually matches, but failed/retried beats can skew it).
-  const beatIds = clips.map((c) => c.beat_id).filter((id): id is string => Boolean(id));
+  const beatIds = clips
+    .map((c) => c.beat_id)
+    .filter((id): id is string => Boolean(id));
   const { data: beats } = await supabase
     .from("beats")
     .select("id, idx")
@@ -80,21 +84,30 @@ export async function assembleFinal(projectId: string) {
     return ai - bi;
   });
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `hookm-${projectId}-`));
+  const tmpDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), `hookm-${projectId}-`)
+  );
   console.log("[assemble] tmp", tmpDir, "clips", orderedClips.length);
 
   try {
     // Download all assets in parallel.
     const clipPaths = await Promise.all(
       orderedClips.map(async (clip, i) => {
-        if (!clip.storage_path) throw new Error(`clip ${clip.id} has no storage_path`);
+        if (!clip.storage_path)
+          throw new Error(`clip ${clip.id} has no storage_path`);
         const ext = path.extname(clip.storage_path).toLowerCase() || ".mp4";
-        const dest = path.join(tmpDir, `clip${String(i).padStart(2, "0")}${ext}`);
+        const dest = path.join(
+          tmpDir,
+          `clip${String(i).padStart(2, "0")}${ext}`
+        );
         await downloadTo(svc, clip.storage_path, dest);
         return dest;
-      }),
+      })
     );
-    const voicePath = path.join(tmpDir, `voice${path.extname(voice.storage_path) || ".mp3"}`);
+    const voicePath = path.join(
+      tmpDir,
+      `voice${path.extname(voice.storage_path) || ".mp3"}`
+    );
     await downloadTo(svc, voice.storage_path, voicePath);
 
     const outPath = path.join(tmpDir, "final.mp4");
@@ -102,14 +115,22 @@ export async function assembleFinal(projectId: string) {
 
     const bytes = await fs.readFile(outPath);
     const remotePath = `${user.id}/${projectId}/final/${randomUUID()}.mp4`;
-    const { error: upErr } = await svc.storage.from("media").upload(remotePath, bytes, {
-      contentType: "video/mp4",
-      upsert: true,
-    });
+    const { error: upErr } = await svc.storage
+      .from("media")
+      .upload(remotePath, bytes, {
+        contentType: "video/mp4",
+        upsert: true,
+      });
     if (upErr) throw upErr;
-    const { data: signed } = await svc.storage.from("media").createSignedUrl(remotePath, 60 * 60 * 24);
+    const { data: signed } = await svc.storage
+      .from("media")
+      .createSignedUrl(remotePath, 60 * 60 * 24);
 
-    await supabase.from("assets").delete().eq("project_id", projectId).eq("kind", "final");
+    await supabase
+      .from("assets")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("kind", "final");
 
     const finalRow: TablesInsert<"assets"> = {
       project_id: projectId,
@@ -143,13 +164,22 @@ export async function assembleFinal(projectId: string) {
 
 // ---------------------------------------------------------------------------
 
-async function downloadTo(svc: ReturnType<typeof createService>, storagePath: string, dest: string) {
+async function downloadTo(
+  svc: ReturnType<typeof createService>,
+  storagePath: string,
+  dest: string
+) {
   const { data, error } = await svc.storage.from("media").download(storagePath);
-  if (error || !data) throw error ?? new Error(`download failed: ${storagePath}`);
+  if (error || !data)
+    throw error ?? new Error(`download failed: ${storagePath}`);
   await fs.writeFile(dest, Buffer.from(await data.arrayBuffer()));
 }
 
-function buildFfmpegArgs(clipPaths: string[], voicePath: string, outPath: string): string[] {
+function buildFfmpegArgs(
+  clipPaths: string[],
+  voicePath: string,
+  outPath: string
+): string[] {
   const args: string[] = ["-y"];
 
   // Inputs: stills get -loop 1 -t N; videos go straight in.
@@ -166,25 +196,35 @@ function buildFfmpegArgs(clipPaths: string[], voicePath: string, outPath: string
   const filters = clipPaths
     .map(
       (_, i) =>
-        `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,format=yuv420p[v${i}]`,
+        `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,format=yuv420p[v${i}]`
     )
     .join(";");
   const concatInputs = clipPaths.map((_, i) => `[v${i}]`).join("");
   const filterComplex = `${filters};${concatInputs}concat=n=${clipPaths.length}:v=1:a=0[outv]`;
 
   args.push(
-    "-filter_complex", filterComplex,
-    "-map", "[outv]",
-    "-map", `${clipPaths.length}:a`,
-    "-c:v", "libx264",
-    "-preset", "veryfast",
-    "-crf", "22",
-    "-pix_fmt", "yuv420p",
-    "-c:a", "aac",
-    "-b:a", "160k",
-    "-movflags", "+faststart",
+    "-filter_complex",
+    filterComplex,
+    "-map",
+    "[outv]",
+    "-map",
+    `${clipPaths.length}:a`,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "22",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "160k",
+    "-movflags",
+    "+faststart",
     "-shortest",
-    outPath,
+    outPath
   );
   return args;
 }
@@ -192,9 +232,13 @@ function buildFfmpegArgs(clipPaths: string[], voicePath: string, outPath: string
 function runFfmpeg(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     console.log("[ffmpeg]", ffmpegInstaller.path, args.join(" "));
-    const proc = spawn(ffmpegInstaller.path, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawn(ffmpegInstaller.path, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stderr = "";
-    proc.stderr?.on("data", (d) => { stderr += d.toString(); });
+    proc.stderr?.on("data", (d) => {
+      stderr += d.toString();
+    });
     proc.on("error", reject);
     proc.on("close", (code) => {
       if (code === 0) resolve();

@@ -8,27 +8,31 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { generateMotionClips, generateStillClips } from "@/lib/actions/clips";
 import { advanceTo } from "@/lib/actions/projects";
+import { useAssetsRealtime, type RealtimeAsset } from "@/lib/hooks/use-assets-realtime";
 
-type Clip = { id: string; beat_id: string | null; url: string | null; status: "pending" | "processing" | "ready" | "failed"; error: string | null };
+type Clip = RealtimeAsset;
 
 export function ClipsPanel({
   projectId,
   imageCount,
-  clips,
+  clips: initialClips,
 }: {
   projectId: string;
   imageCount: number;
   clips: Clip[];
 }) {
   const router = useRouter();
+  const clips = useAssetsRealtime<Clip>(projectId, "clip", initialClips);
   const [veoPending, startVeo] = useTransition();
   const [stillPending, startStill] = useTransition();
   const [advancing, startAdvance] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const ready = clips.filter((c) => c.status === "ready");
-  const processing = clips.filter((c) => c.status === "processing").length;
-  const failed = clips.filter((c) => c.status === "failed").length;
+  // Sort by insertion order so the grid stays stable across realtime updates.
+  const sorted = [...clips].sort((a, b) => a.id.localeCompare(b.id));
+  const ready = sorted.filter((c) => c.status === "ready");
+  const processing = sorted.filter((c) => c.status === "processing").length;
+  const failed = sorted.filter((c) => c.status === "failed").length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -106,9 +110,9 @@ export function ClipsPanel({
         </p>
       </Card>
 
-      {clips.length > 0 && (
+      {sorted.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {clips.map((c) => (
+          {sorted.map((c) => (
             <div
               key={c.id}
               className={`relative aspect-[9/16] overflow-hidden rounded-[var(--radius-lg)] border bg-black ${

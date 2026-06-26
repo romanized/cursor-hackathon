@@ -19,7 +19,7 @@ export default async function ClipsStep({ params }: { params: Promise<{ id: stri
       .eq("status", "ready"),
     supabase
       .from("assets")
-      .select("id, beat_id, url, status, error")
+      .select("id, beat_id, kind, url, storage_path, status, error")
       .eq("project_id", id)
       .eq("kind", "clip")
       .order("created_at"),

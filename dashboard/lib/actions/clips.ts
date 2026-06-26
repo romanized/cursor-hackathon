@@ -68,75 +68,27 @@ export async function generateMotionClips(projectId: string) {
     total: images.length,
   });
 
+  // Veo runs are independent → fire them all in parallel. Each beat's row
+  // flips processing → ready/failed on its own, and the client subscribes via
+  // Supabase Realtime to render the change immediately.
+  const runnableTodo = todo.filter((img) => img.beat_id && img.storage_path);
+  const results = await Promise.allSettled(
+    runnableTodo.map((img) => generateOneClip({
+      svc,
+      supabase,
+      userId: user.id,
+      projectId,
+      img: { id: img.id, beat_id: img.beat_id!, storage_path: img.storage_path! },
+      beat: beats?.find((b) => b.id === img.beat_id) ?? null,
+    })),
+  );
+
   let generated = 0;
   const errors: Array<{ beat: string; error: string }> = [];
-
-  for (const img of todo) {
-    if (!img.beat_id || !img.storage_path) continue;
-    const beat = beats?.find((b) => b.id === img.beat_id);
-
-    // Mark processing so the UI shows a spinner per beat.
-    const { data: assetRow, error: insErr } = await supabase
-      .from("assets")
-      .insert({
-        project_id: projectId,
-        beat_id: img.beat_id,
-        kind: "clip",
-        status: "processing",
-        provider: "google:veo-3-fast",
-        meta: { source_image: img.id } as never,
-      } satisfies TablesInsert<"assets">)
-      .select("id")
-      .single();
-    if (insErr || !assetRow) {
-      errors.push({ beat: img.beat_id, error: insErr?.message ?? "insert failed" });
-      continue;
-    }
-
-    try {
-      // Download the source image from Storage (signed URL would expire).
-      const { data: imgBlob, error: dlErr } = await svc.storage.from("media").download(img.storage_path);
-      if (dlErr || !imgBlob) throw dlErr ?? new Error("could not download source image");
-      const imageBytes = Buffer.from(await imgBlob.arrayBuffer());
-
-      const motionPrompt = [
-        beat?.visual_prompt || beat?.text || "Subtle product motion",
-        // Nudge toward gentle, ad-friendly motion.
-        "Smooth camera push-in, subtle product rotation, soft parallax. Cinematic, no abrupt cuts.",
-      ].join(" ");
-
-      const { bytes, mimeType } = await generateVideoFromImage({
-        imageBytes,
-        imageMimeType: imgBlob.type || "image/png",
-        prompt: motionPrompt,
-      });
-
-      const path = `${user.id}/${projectId}/clips/${img.beat_id}.mp4`;
-      const { error: upErr } = await svc.storage.from("media").upload(path, bytes, {
-        contentType: mimeType,
-        upsert: true,
-      });
-      if (upErr) throw upErr;
-      const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
-
-      await supabase
-        .from("assets")
-        .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
-        .eq("id", assetRow.id);
-      generated += 1;
-      console.log("[generateMotionClips] ok", { beat: img.beat_id, path });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await supabase
-        .from("assets")
-        .update({ status: "failed", error: msg })
-        .eq("id", assetRow.id);
-      errors.push({ beat: img.beat_id, error: msg });
-      console.error("[generateMotionClips] failed", { beat: img.beat_id, error: msg });
-    }
-
-    revalidatePath(`/create/${projectId}/clips`);
-  }
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") generated += 1;
+    else errors.push({ beat: runnableTodo[i].beat_id!, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+  });
 
   // Advance furthest reachable step if at least one clip is ready overall.
   const { data: anyReady } = await supabase
@@ -152,6 +104,70 @@ export async function generateMotionClips(projectId: string) {
 
   revalidatePath(`/create/${projectId}`, "layout");
   return { generated, errors };
+}
+
+async function generateOneClip(args: {
+  svc: ReturnType<typeof createService>;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  projectId: string;
+  img: { id: string; beat_id: string; storage_path: string };
+  beat: { visual_prompt: string | null; text: string } | null;
+}) {
+  const { svc, supabase, userId, projectId, img, beat } = args;
+
+  const { data: assetRow, error: insErr } = await supabase
+    .from("assets")
+    .insert({
+      project_id: projectId,
+      beat_id: img.beat_id,
+      kind: "clip",
+      status: "processing",
+      provider: "google:veo-3-fast",
+      meta: { source_image: img.id } as never,
+    } satisfies TablesInsert<"assets">)
+    .select("id")
+    .single();
+  if (insErr || !assetRow) throw insErr ?? new Error("insert failed");
+
+  try {
+    const { data: imgBlob, error: dlErr } = await svc.storage.from("media").download(img.storage_path);
+    if (dlErr || !imgBlob) throw dlErr ?? new Error("could not download source image");
+    const imageBytes = Buffer.from(await imgBlob.arrayBuffer());
+
+    const motionPrompt = [
+      beat?.visual_prompt || beat?.text || "Subtle product motion",
+      "Smooth camera push-in, subtle product rotation, soft parallax. Cinematic, no abrupt cuts.",
+    ].join(" ");
+
+    const { bytes, mimeType } = await generateVideoFromImage({
+      imageBytes,
+      imageMimeType: imgBlob.type || "image/png",
+      prompt: motionPrompt,
+    });
+
+    const path = `${userId}/${projectId}/clips/${img.beat_id}.mp4`;
+    const { error: upErr } = await svc.storage.from("media").upload(path, bytes, {
+      contentType: mimeType,
+      upsert: true,
+    });
+    if (upErr) throw upErr;
+    const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
+
+    await supabase
+      .from("assets")
+      .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
+      .eq("id", assetRow.id);
+    console.log("[generateMotionClips] ok", { beat: img.beat_id, path });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await supabase
+      .from("assets")
+      .update({ status: "failed", error: msg })
+      .eq("id", assetRow.id);
+    console.error("[generateMotionClips] failed", { beat: img.beat_id, error: msg });
+    throw e;
+  }
 }
 
 /**
