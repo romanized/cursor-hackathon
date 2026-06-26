@@ -12,8 +12,10 @@ Onder elke stap staat een blok **`In te vullen:`** dat we samen aanvullen.
 
 ### Documenten
 - `PROJECT.md` — dit bestand: wat we bouwen + de 8-stappen product-workflow.
-- `plan/TEAM-PLAN.md` — marktaanval voor het team: 3 werkstromen, contract, prioriteiten, demo-lock.
-- `plan/REVERSE-ENGINEERING.md` — hoe hookm.ai het doet + capture-tabel voor de 5-6-product sessie.
+- `TEAM-PLAN.md` — marktaanval voor het team: 3 werkstromen, contract, prioriteiten, demo-lock.
+- `REVERSE-ENGINEER.md` — hoe hookm.ai het doet + capture-tabel voor de 5-6-product sessie.
+- `DATA-MODEL.md` — het frozen contract: tabellen, lifecycles, per-step read/write map.
+- `SUPABASE.md` — Supabase setup voor het team (CLI, MCP, migrations).
 - `CLAUDE.md` — marktaanval voor de AI: rol-model, regels, modes. *(Team hoeft dit niet te lezen.)*
 
 ---

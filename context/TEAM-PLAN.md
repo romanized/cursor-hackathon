@@ -8,12 +8,12 @@ Doel: in ~7 werkuren een schaalbare, werkende demo bouwen zonder dat de 3 werkst
 3. **Frontend** — landing page, login, app-UI.
 
 ## Anti-conflict: het contract (eerst, samen, vóór er gebouwd wordt)
-Mappen scheiden is niet genoeg — werkstromen botsen op de *data*. Bevries vooraf:
-- Het centrale object dat door alle 8 stappen loopt (Project → Template → Brief → Script/Beats → Images → Voice → Clips → Final) — zie de 8 stappen in [../PROJECT.md](../PROJECT.md).
-- De koppeling frontend ⇆ backend (welke data, welke status).
-- De credit-economie (kost per stap) — nu ontwerpen, later bouwen.
+Mappen scheiden is niet genoeg — werkstromen botsen op de *data*. Het contract staat in **[DATA-MODEL.md](DATA-MODEL.md)** (Supabase migrations + RLS). Wat erin zit:
+- Het centrale object dat door alle 8 stappen loopt: `projects` (+ `products`, `beats`, `assets`).
+- De koppeling frontend ⇆ backend: status-velden (`projects.status`, `current_step`, `assets.status`) zodat de UI nooit hangt.
+- De credit-economie: `profiles.credits` + append-only `credit_ledger`. Kosten (hook=1, full=3) in de server actions.
 
-*(Placeholder — samen invullen.)*
+Wijzigingen aan het contract? PR met migratie **en** doc-update in dezelfde commit.
 
 ## Prioriteiten
 1. **User-flow / gebruiksvriendelijkheid** — alles logisch, je weet waar alles is. Performance-based, werkt ook met animaties uit.
