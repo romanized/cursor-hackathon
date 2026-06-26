@@ -73,7 +73,14 @@ export async function saveScript(
   projectId: string,
   payload: {
     voiceover_script: string;
-    beats: Array<{ label: string; text: string; visual_prompt: string }>;
+    beats: Array<{
+      label: string;
+      text: string;
+      visual_prompt: string;
+      type?: "character" | "microscopic";
+      role?: string;
+      duration_seconds?: number;
+    }>;
   },
 ) {
   const { supabase } = await requireUser();
@@ -89,6 +96,11 @@ export async function saveScript(
       label: b.label || null,
       text: b.text,
       visual_prompt: b.visual_prompt || null,
+      meta: {
+        type: b.type === "microscopic" ? "microscopic" : "character",
+        role: b.role ?? "",
+        duration_seconds: typeof b.duration_seconds === "number" ? b.duration_seconds : 4,
+      } as never,
     }));
     const { error: insErr } = await supabase.from("beats").insert(rows);
     if (insErr) throw insErr;
@@ -114,7 +126,7 @@ export async function generateScriptForProject(projectId: string) {
   const { data: project, error: pErr } = await supabase
     .from("projects")
     .select(
-      "template_id, runtime, product_name, target_audience, customer_issues, benefits, product_id",
+      "template_id, runtime, product_name, target_audience, customer_issues, benefits, product_id, meta",
     )
     .eq("id", projectId)
     .single();
@@ -157,14 +169,19 @@ export async function generateScriptForProject(projectId: string) {
       label: b.label || null,
       text: b.text,
       visual_prompt: b.visual_prompt || null,
+      meta: { type: b.type, role: b.role, duration_seconds: b.duration_seconds } as never,
     }));
     const { error: insErr } = await supabase.from("beats").insert(rows);
     if (insErr) throw insErr;
   }
 
+  const existingMeta = (project.meta ?? {}) as Record<string, unknown>;
   const { error: upErr } = await supabase
     .from("projects")
-    .update({ voiceover_script: result.voiceover_script || null })
+    .update({
+      voiceover_script: result.voiceover_script || null,
+      meta: { ...existingMeta, script_metaphor: result.metaphor || null } as never,
+    } satisfies TablesUpdate<"projects">)
     .eq("id", projectId);
   if (upErr) throw upErr;
 

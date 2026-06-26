@@ -49,10 +49,38 @@ const MASCOT_STYLE: Record<string, string> = {
 
 const ai = () => new GoogleGenAI({ apiKey: requireServer("GOOGLE_API_KEY") });
 
+// gemini-2.5-flash-image only accepts these raster input types. Scraped product
+// photos are often SVG logos (image/svg+xml) which the API rejects with a 400
+// "Unsupported MIME type" — drop any reference image that isn't supported.
+const GEMINI_IMAGE_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+function asSupportedRef(
+  ref: { bytes: Buffer; mimeType: string } | null | undefined,
+): { bytes: Buffer; mimeType: string } | null {
+  if (!ref) return null;
+  let mt = ref.mimeType.toLowerCase().split(";")[0].trim();
+  if (mt === "image/jpg") mt = "image/jpeg";
+  if (!GEMINI_IMAGE_MIME.has(mt)) {
+    console.warn("[google] dropping unsupported reference image", { mimeType: ref.mimeType });
+    return null;
+  }
+  return { bytes: ref.bytes, mimeType: mt };
+}
+
+export type BeatType = "character" | "microscopic";
+
 export type BeatImageInput = {
   templateId: string | null;
   productName: string | null;
   beat: { label: string | null; text: string; visual_prompt: string | null };
+  /** "microscopic" = pure mechanism CGI: no character, no product/style refs. */
+  beatType?: BeatType | null;
   /** Scraped product photo — keeps the product identifiable across beats. */
   referenceImage?: { bytes: Buffer; mimeType: string } | null;
   /** Canonical mascot portrait — keeps the character design identical across beats. */
@@ -88,10 +116,26 @@ export async function generateMascotImage(input: {
 }
 
 export async function generateBeatImage(input: BeatImageInput): Promise<{ bytes: Buffer; mimeType: string }> {
-  const style = (input.templateId && STYLE[input.templateId]) || STYLE.skeleton_ai;
   const beatPrompt =
     input.beat.visual_prompt?.trim() ||
     `Visualize this voiceover beat: "${input.beat.text}"`;
+
+  // Microscopic beats are pure mechanism CGI — no character, no template style,
+  // no product/mascot reference. The visual_prompt already carries the full
+  // locked CGI style tokens, so we feed it on its own.
+  if (input.beatType === "microscopic") {
+    const micInput: BeatImageInput = { ...input, referenceImage: null, mascotImage: null };
+    try {
+      return await runGenerate(micInput, "", beatPrompt);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/PROHIBITED_CONTENT|SAFETY|BLOCKED/.test(msg)) throw e;
+      console.warn("[google.generateBeatImage] microscopic retry with safe fallback", { reason: msg });
+      return await runGenerate(micInput, SAFE_STYLE, "Clean studio product shot. Centered, neutral background.");
+    }
+  }
+
+  const style = (input.templateId && STYLE[input.templateId]) || STYLE.skeleton_ai;
 
   try {
     return await runGenerate(input, style, beatPrompt);
@@ -112,15 +156,18 @@ async function runGenerate(
   style: string,
   beatPrompt: string,
 ): Promise<{ bytes: Buffer; mimeType: string }> {
+  const productRef = asSupportedRef(input.referenceImage);
+  const mascotRef = asSupportedRef(input.mascotImage);
+
   const refLines: string[] = [];
-  if (input.referenceImage) {
+  if (productRef) {
     refLines.push(
       "The first supplied image is the product — keep it identifiable and consistent in the scene.",
     );
   }
-  if (input.mascotImage) {
+  if (mascotRef) {
     refLines.push(
-      input.referenceImage
+      productRef
         ? "The second supplied image is the mascot character — keep this exact character design (face, colors, proportions, outfit) identical in every scene."
         : "The supplied image is the mascot character — keep this exact character design (face, colors, proportions, outfit) identical in every scene.",
     );
@@ -136,19 +183,19 @@ async function runGenerate(
   ].filter(Boolean).join("\n\n");
 
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
-  if (input.referenceImage) {
+  if (productRef) {
     parts.push({
       inlineData: {
-        mimeType: input.referenceImage.mimeType,
-        data: input.referenceImage.bytes.toString("base64"),
+        mimeType: productRef.mimeType,
+        data: productRef.bytes.toString("base64"),
       },
     });
   }
-  if (input.mascotImage) {
+  if (mascotRef) {
     parts.push({
       inlineData: {
-        mimeType: input.mascotImage.mimeType,
-        data: input.mascotImage.bytes.toString("base64"),
+        mimeType: mascotRef.mimeType,
+        data: mascotRef.bytes.toString("base64"),
       },
     });
   }
@@ -212,8 +259,48 @@ async function runImageGenerate(args: {
 // Script generator — Gemini 2.5 Flash with structured JSON output.
 // =============================================================================
 
-export type ScriptBeat = { label: string; text: string; visual_prompt: string };
-export type GeneratedScript = { voiceover_script: string; beats: ScriptBeat[] };
+export type ScriptBeat = {
+  label: string;
+  text: string;
+  visual_prompt: string;
+  type: BeatType;
+  role: string;
+  duration_seconds: number;
+};
+export type GeneratedScript = {
+  voiceover_script: string;
+  metaphor: string;
+  beats: ScriptBeat[];
+};
+
+// The recurring hero per template — the character that acts the pain/payoff in
+// every `character` beat. The mascot reference IMAGE (loaded at render) carries
+// the exact look; this text only tells the scriptwriter who it is.
+const CHARACTER: Record<string, { name: string; description: string }> = {
+  skeleton_ai: {
+    name: "Skeleton",
+    description:
+      "a full-body figure with translucent glass-like skin revealing a white skeleton inside, wearing a blue sports headband, with large round expressive cartoon eyes",
+  },
+  cartoon: {
+    name: "Cartoon",
+    description:
+      "a bold yellow-skinned suburban-comedy cartoon character with thick black outlines and exaggerated comic proportions",
+  },
+  cgi_3d: {
+    name: "Hero",
+    description: "a photoreal 3D CGI character",
+  },
+  ai_streamer_clip: {
+    name: "Streamer",
+    description: "a young gaming streamer wearing a headset in a neon RGB bedroom-studio",
+  },
+  pibble_dog: {
+    name: "Pibble",
+    description:
+      "a cream-coloured French-bulldog puppy with soft off-white fur, big dark eyes, a dark nose, rounded upright ears and a chubby belly",
+  },
+};
 
 // =============================================================================
 // Brief inference — derive audience / pains / benefits from scraped data.
@@ -285,26 +372,63 @@ export type ScriptInput = {
 };
 
 export async function generateScript(input: ScriptInput): Promise<GeneratedScript> {
-  const beatCount = input.runtime === "hook" ? 6 : 10;
-  const style = (input.templateId && STYLE[input.templateId]) || STYLE.skeleton_ai;
+  const isHook = input.runtime === "hook";
+  const runtimeSeconds = isHook ? 20 : 60;
+  const beatRange = isHook ? "6 to 8" : "10 to 14";
+  const wordTarget = isHook ? "45-55 words" : "130-150 words";
+
+  const character =
+    (input.templateId && CHARACTER[input.templateId]) || CHARACTER.skeleton_ai;
 
   const prompt = [
-    `You are a senior TikTok/Reels copywriter writing a viral product hook ad in English.`,
-    `Output a structured ${input.runtime === "hook" ? "~18 second" : "~30 second"} script split into exactly ${beatCount} beats.`,
+    `You are a senior short-form ad scriptwriter. You write scroll-stopping UGC "hook" videos that mix TWO visual languages:`,
+    `1. a recurring acted CHARACTER (the hero) who suffers the problem and is saved, and`,
+    `2. 3D-CGI "microscopic" beats that visualize WHY the product works at molecular/macro scale.`,
+    ``,
+    `THE CHARACTER (lock for the WHOLE video — same hero in every character beat):`,
+    `- Name: ${character.name}`,
+    `- Description: ${character.description}`,
+    `- A reference IMAGE of this character is supplied to the image model on every character beat, so in "visual_prompt" you describe ONLY action, pose, scene, camera and light — say "the character", NEVER re-describe the anatomy/body.`,
     ``,
     `BRIEF`,
     `- Product: ${input.productName || "(unspecified)"}`,
-    input.productDescription ? `- Description: ${input.productDescription.slice(0, 500)}` : "",
-    `- Target audience: ${input.targetAudience || "(general)"}`,
-    input.customerIssues.length ? `- Customer pains:\n  ${input.customerIssues.map((p) => `· ${p}`).join("\n  ")}` : "",
-    input.benefits.length ? `- Product benefits:\n  ${input.benefits.map((b) => `· ${b}`).join("\n  ")}` : "",
+    input.productDescription ? `- Description: ${input.productDescription.slice(0, 800)}` : "",
+    `- Target audience: ${input.targetAudience || "(infer from the product)"}`,
+    input.customerIssues.length ? `- Customer pains (raw — dramatize, never copy verbatim):\n  ${input.customerIssues.map((p) => `· ${p}`).join("\n  ")}` : "",
+    input.benefits.length ? `- Benefits / mechanism (the one reason it works drives the microscopic beats):\n  ${input.benefits.map((b) => `· ${b}`).join("\n  ")}` : "",
     ``,
-    `STRUCTURE`,
-    `- Beat 1 = Hook: a counter-intuitive, attention-grabbing punch in the first 2 seconds. No greetings, no "Hey guys".`,
-    `- Then Problem → Reveal → Proof → (optional Detail) → CTA in order.`,
-    `- Each beat: one spoken sentence, ≤ 14 words, conversational ("you", contractions, micro-pauses with "...").`,
-    `- "visual_prompt" describes what should be on screen for the beat in the chosen visual style (${style}). One sentence, no camera jargon, no text overlays.`,
-    `- The final "voiceover_script" must be the concatenation of all beat texts in order, separated by newlines — no extra prose.`,
+    `CORE PRINCIPLE — dramatize the pain, then prove the mechanism.`,
+    `- Problem = felt, visible drama. The character physically lives the WORST-CASE version of the pain. Visceral, not "a bit uncomfortable".`,
+    `- Solution = a credible mechanism made beautiful: show the inner mechanism as a glowing CGI visualization (the microscopic beats). Proof, not a claim.`,
+    `- MATCH THE REGISTER: if the pain is already physical/visceral (drowning, suffocating, burning, crushing) play it STRAIGHT, intense, realistic. If the pain is mundane (ugly glasses, hot room, slow wifi) ESCALATE to absurdist physical peril so it still reads as life-or-death. Tame = invisible = no views; absurd-when-it-should-be-real breaks the spell. Calibrate.`,
+    ``,
+    `THE TWO BEAT TYPES (every beat is exactly one):`,
+    `- "character": the supplied character physically performs the pain (problem beats) or the relief (payoff), in a real-world setting that matches the product.`,
+    `- "microscopic": a 3D-rendered CGI look INSIDE the product at extreme macro scale, showing the ONE mechanism that makes it work. NO character appears. Calm, fascinating, scientific.`,
+    ``,
+    `BEAT ARC (arrange in this order). Open and close on a "character" beat; place "microscopic" at the mechanism turn:`,
+    `1. Hook + escalation (first 2-3 beats, "character", role hook then escalation): drop mid-pain, no build-up; each beat stacks a DIFFERENT, WORSE pain from the brief.`,
+    `2. Reframe (1 beat, "character", role reframe): "it's not because you're bad at this" — show the character competent/capable, remove self-blame.`,
+    `3. Mechanism (1-2 beats, "microscopic", role mechanism): the CGI proof of WHY it works, calm and luminous.`,
+    isHook ? "" : `   (full ad only) add a product reveal beat (role solution) that names the product + its one mechanism.`,
+    `4. Payoff (final beat, "character", role payoff): the character restored — hopeful, curious, or thriving.`,
+    ``,
+    `VOICE-OVER RULES`,
+    `- Hook lands in the first 1-2 seconds: pattern-interrupt, blunt claim, or question. Direct-address UGC tone: casual, punchy, contractions, short sentences. NO corporate voice.`,
+    `- Pace ~2-2.5 words/sec → total voiceover_script ≈ ${wordTarget}. The drama lives in the VISUALS; the VO stays believably casual over the chaos.`,
+    isHook
+      ? `- HOOK VARIANT shape (do this): (a) pain stack "If you [pain 1], [pain 2], or [pain 3]—", (b) reframe "It's probably not because [self-blame the audience assumes]—", (c) principle "[the activity] just needs [the core mechanism, described generically] to actually work." NO brand name, NO call-to-action — the tease IS the hook.`
+      : `- FULL AD: include a product reveal (name the product + its one mechanism) and a closing SOFT CTA ("link's right there").`,
+    ``,
+    `VISUAL-PROMPT RULES (always 9:16):`,
+    `- character beats: "9:16 image of the character [action dramatizing this beat], [emotional detail], [body language]. [Real-world environment]. [Camera angle], [lighting]." Action/scene only — do NOT describe the character's anatomy.`,
+    `- microscopic beats MUST carry ALL these locked style tokens: "A 3D rendered CGI visualization of [the mechanism] at extreme macro scale, [what it's doing]. Dark moody environment — deep black, dark teal. Bioluminescent glow: soft greens, teals, neon edges. [structure] provides scale. Volumetric fog, dramatic rim/backlit lighting. Clean CGI medical visualization style. 9:16 vertical composition."`,
+    ``,
+    `OUTPUT`,
+    `- ${beatRange} beats. Each beat: type, role, vo_line, duration_seconds (3-4s each, summing to ≈ ${runtimeSeconds}), visual_prompt.`,
+    `- "metaphor": one line naming the peril the character endures (real or absurdist per register).`,
+    `- "voiceover_script": the full spoken text as one block — the beats' vo_line in order must reconstruct it.`,
+    `- Never invent unverifiable factual/medical claims; only dramatize what the brief supports.`,
   ].filter(Boolean).join("\n");
 
   const res = await ai().models.generateContent({
@@ -315,33 +439,70 @@ export async function generateScript(input: ScriptInput): Promise<GeneratedScrip
       responseSchema: {
         type: Type.OBJECT,
         properties: {
+          metaphor: { type: Type.STRING },
           voiceover_script: { type: Type.STRING },
           beats: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
-                label: { type: Type.STRING },
-                text: { type: Type.STRING },
+                type: { type: Type.STRING, enum: ["character", "microscopic"] },
+                role: { type: Type.STRING },
+                vo_line: { type: Type.STRING },
+                duration_seconds: { type: Type.NUMBER },
                 visual_prompt: { type: Type.STRING },
               },
-              required: ["label", "text", "visual_prompt"],
+              required: ["type", "role", "vo_line", "duration_seconds", "visual_prompt"],
             },
           },
         },
-        required: ["voiceover_script", "beats"],
+        required: ["metaphor", "voiceover_script", "beats"],
       },
     },
   });
 
   const raw = res.text;
   if (!raw) throw new Error("Gemini returned empty script response");
+
+  type RawBeat = {
+    type?: string;
+    role?: string;
+    vo_line?: string;
+    duration_seconds?: number;
+    visual_prompt?: string;
+  };
+  type RawScript = { metaphor?: string; voiceover_script?: string; beats?: RawBeat[] };
+
+  let parsed: RawScript;
   try {
-    return JSON.parse(raw) as GeneratedScript;
+    parsed = JSON.parse(raw) as RawScript;
   } catch (e) {
     console.error("[google.generateScript] JSON parse failed", { raw });
     throw e;
   }
+
+  const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+  const beats: ScriptBeat[] = (parsed.beats ?? []).map((b) => {
+    const type: BeatType = b.type === "microscopic" ? "microscopic" : "character";
+    const role = (b.role ?? "").trim();
+    return {
+      type,
+      role,
+      label: cap(role) || (type === "microscopic" ? "Mechanism" : "Beat"),
+      text: (b.vo_line ?? "").trim(),
+      visual_prompt: (b.visual_prompt ?? "").trim(),
+      duration_seconds:
+        typeof b.duration_seconds === "number" && b.duration_seconds > 0
+          ? b.duration_seconds
+          : 4,
+    };
+  });
+
+  const voiceover_script =
+    (parsed.voiceover_script ?? "").trim() ||
+    beats.map((b) => b.text).filter(Boolean).join(" ");
+
+  return { voiceover_script, metaphor: (parsed.metaphor ?? "").trim(), beats };
 }
 
 // =============================================================================

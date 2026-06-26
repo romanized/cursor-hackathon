@@ -1,5 +1,6 @@
 import "server-only";
 
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -9,10 +10,19 @@ const TEMPLATE_REFS: Record<string, { file: string; mimeType: string }> = {
     file: path.join(process.cwd(), "public/references/pibble-mascot.png"),
     mimeType: "image/png",
   },
+  skeleton_ai: {
+    file: path.join(process.cwd(), "public/references/skeleton-mascot.png"),
+    mimeType: "image/png",
+  },
 };
 
+// Only count a template as having a bundled reference if the file is actually
+// present — otherwise fall back to Gemini mascot generation. Lets us register a
+// template before its asset ships without breaking image generation.
 export function hasTemplateReference(templateId: string | null): boolean {
-  return Boolean(templateId && TEMPLATE_REFS[templateId]);
+  if (!templateId) return false;
+  const ref = TEMPLATE_REFS[templateId];
+  return Boolean(ref && existsSync(ref.file));
 }
 
 export async function loadTemplateReferenceImage(
