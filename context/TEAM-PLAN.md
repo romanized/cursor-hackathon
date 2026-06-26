@@ -27,3 +27,10 @@ Alles daarbuiten (slideshow, andere formats, trends, subscription) = post-MVP.
 ## Eerst de-risken (research, dag-start)
 - **beeld→video (stap 6):** hier hebben we geen voorbeeld van → eigen aanpak zoeken. Hoogste onzekerheid → eerst.
 - **async generatie:** stappen 4–7 zijn traag en kunnen falen → job-model (status/retry), UI nooit laten hangen.
+
+## Status (live)
+
+- ✅ Migrations applied: core schema, RLS + Storage, template seeds, advisor fixes, `charge_credits`. Advisors = 0 lints.
+- ✅ Dashboard scaffold in `dashboard/` (Next.js, Tailwind v4, Hugeicons). Auth + (app) shell + 8-step wizard wired end-to-end. See `dashboard/README.md`.
+- ⏳ Stap 6 (image→video) is een **still-clip placeholder** met een `ponytail:` markering in `lib/actions/clips.ts`. Upgrade-pad: Remotion of een video-model — alleen die ene actie wijzigen.
+- ⏳ Subscription / payments — leeg; sidebar toont alleen een "Subscribe"-knop. Polar / Stripe later toevoegen.
