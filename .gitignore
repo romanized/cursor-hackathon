@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+vendor/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Build output
+dist/
+build/
+out/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+
+# Misc
+.cache/
+coverage/
+.tmp/
