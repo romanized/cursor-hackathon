@@ -19,7 +19,7 @@ import {
  * SNEAK-PEEK — "Inside the studio".
  *
  * The section that immediately follows the pinned hero. It is a little WINDOW INTO
- * THE REAL HOOKM PRODUCT: a faithful, premium mimic of the dashboard's Step-01
+ * THE REAL HOOKLINE PRODUCT: a faithful, premium mimic of the dashboard's Step-01
  * "Pick a format" screen. Because it is the product, the panel adopts the REAL
  * dashboard aesthetic — warm near-black (#0a0606) + RED (#ef4444) accent — which
  * is DELIBERATELY different from the landing page's Studio Black + lime. That
@@ -57,7 +57,7 @@ export type SneakPeekProps = SectionProps;
 const META = SECTIONS.find((s) => s.id === "sneak-peek");
 
 /**
- * Fonts scoped to the demo panel so it reads as the real Hookm app without
+ * Fonts scoped to the demo panel so it reads as the real Hookline app without
  * touching app/layout.tsx. next/font is a build-time transform that works in
  * client components; both faces are exposed as CSS vars wired into `.hookm-demo`.
  */
@@ -283,7 +283,7 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
             A real window into the studio.
           </h2>
           <p className="mt-5 max-w-[52ch] text-pretty font-sans text-base text-muted md:text-lg">
-            This is the actual Hookm dashboard. Paste a product link, pick a hook
+            This is the actual Hookline dashboard. Paste a product link, pick a hook
             format, and the eight-step studio renders a finished ad.
           </p>
         </div>
@@ -392,10 +392,10 @@ function TeaserSlip() {
 }
 
 /**
- * LEFT SIDEBAR — mimics components/sidebar.tsx: "hookm." wordmark (red period),
+ * LEFT SIDEBAR — mimics components/sidebar.tsx: "Hookline." wordmark (red period),
  * WORKSPACE group (Create primary RED w/ glow, Library, Products, Trends), ACCOUNT
  * group (Account, Usage and Billing), a generic PLAN card (Pro / unlimited renders,
- * no credits count), and a neutral "Hookm Studio · Live preview" demo chip. The
+ * no credits count), and a neutral "Hookline Studio · Live preview" demo chip. The
  * personal account identity (avatar, username, role, socials) is intentionally
  * stripped so the panel reads as a product DEMO, not a logged-in user's screen.
  */
@@ -407,7 +407,7 @@ function DemoSidebar() {
       className="hidden flex-col border-r border-[var(--hk-border)] bg-[var(--hk-surface)]/40 px-5 py-6 lg:flex"
     >
       <span className="mb-9 font-[family-name:var(--hk-font-sans)] text-xl font-semibold tracking-tight text-[var(--hk-text)]">
-        hookm
+        Hookline
         <span className="text-[var(--hk-accent)]">.</span>
       </span>
 
@@ -455,7 +455,7 @@ function DemoSidebar() {
           </span>
           <div className="flex flex-col">
             <span className="font-[family-name:var(--hk-font-sans)] text-xs font-medium text-[var(--hk-text)]">
-              Hookm Studio
+              Hookline Studio
             </span>
             <span className="font-[family-name:var(--hk-font-sans)] text-[10px] uppercase tracking-wider text-[var(--hk-faint)]">
               Live preview

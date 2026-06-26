@@ -290,7 +290,7 @@ function HeroBlock() {
         data-hero-soft
         className="gsap-hidden mt-6 max-w-[50ch] text-balance font-sans text-base leading-relaxed text-muted sm:text-lg"
       >
-        Drop in a product link. Hookm scripts, casts, and renders a post-ready
+        Drop in a product link. Hookline scripts, casts, and renders a post-ready
         TikTok &amp; Reels ad in minutes.
       </p>
 
@@ -397,7 +397,7 @@ function HeadlineSwap() {
 /**
  * The fixed nav pill — the ONLY surface allowed `backdrop-blur` (perf rule).
  *
- * A polished product navbar: the "Hookm" wordmark on the left (the mono tagline was
+ * A polished product navbar: the "Hookline" wordmark on the left (the mono tagline was
  * removed for a cleaner nav), a row of quiet center/right nav links (text-muted ->
  * hover:text-fg), and a MUTED ghost "Start rendering" button on the far right.
  *

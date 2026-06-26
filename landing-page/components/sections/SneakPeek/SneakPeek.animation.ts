@@ -9,7 +9,7 @@ import type { SceneBuilder } from "@/hooks/useScrollScene";
  * Two cooperating pieces, ONE scrubbed timeline (owned by `useScrollScene`):
  *
  *  1) PANEL RISE — as the user scrolls out of the pinned hero into this section,
- *     the Hookm-dashboard panel lifts from a parked, slightly-shrunk, slightly-
+ *     the Hookline-dashboard panel lifts from a parked, slightly-shrunk, slightly-
  *     dropped pose (yPercent + scale) into its resting frame while its inner
  *     content (sidebar, step strip, format cards) fans in on a stagger.
  *     Transform/opacity ONLY — no layout props, GPU-cheap.

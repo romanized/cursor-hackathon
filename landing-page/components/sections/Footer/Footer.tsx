@@ -111,20 +111,20 @@ function YouTubeIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 const SOCIAL_LINKS: readonly SocialLink[] = [
-  { label: "Follow Hookm on X", href: "https://x.com/hookmai", Icon: XIcon },
+  { label: "Follow Hookline on X", href: "https://x.com/hookline", Icon: XIcon },
   {
-    label: "Follow Hookm on TikTok",
-    href: "https://tiktok.com/@hookmai",
+    label: "Follow Hookline on TikTok",
+    href: "https://tiktok.com/@hookline",
     Icon: TikTokIcon,
   },
   {
-    label: "Follow Hookm on Instagram",
-    href: "https://instagram.com/hookmai",
+    label: "Follow Hookline on Instagram",
+    href: "https://instagram.com/hookline",
     Icon: InstagramIcon,
   },
   {
-    label: "Follow Hookm on YouTube",
-    href: "https://youtube.com/@hookmai",
+    label: "Follow Hookline on YouTube",
+    href: "https://youtube.com/@hookline",
     Icon: YouTubeIcon,
   },
 ] as const;

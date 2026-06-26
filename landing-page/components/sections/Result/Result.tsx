@@ -123,7 +123,7 @@ export function Result({ id, className }: SectionProps) {
       >
         <Eyebrow index="03">{META?.eyebrow ?? "The output"}</Eyebrow>
         <h2 className="mt-5 max-w-[20ch] text-balance font-sans text-[clamp(2.25rem,5vw,4.5rem)] font-medium leading-[0.95] tracking-tighter text-fg">
-          This is what Hookm ships.
+          This is what Hookline ships.
         </h2>
         <p className="mt-5 max-w-[52ch] text-pretty font-sans text-base text-muted md:text-lg">
           A finished vertical hook — captions, pacing, and grade baked in. Ready to

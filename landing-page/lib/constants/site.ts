@@ -9,18 +9,18 @@ import type { NavItem, SectionMeta } from "@/types";
  */
 
 /** Canonical production origin. Used for `metadataBase` + absolute OG URLs. */
-export const SITE_URL = "https://hookm.ai";
+export const SITE_URL = "https://hookline.ai";
 
 export const SITE = {
-  name: "Hookm",
+  name: "Hookline",
   /** Title shown in the browser tab / used as the metadata template base. */
-  title: "Hookm — Turn any product into a viral hook video",
+  title: "Hookline — Turn any product into a viral hook video",
   /** Sub-60-word elevator pitch reused for meta description + hero subcopy. */
   description:
-    "Drop in a product link, screenshot, or a few notes. Hookm scripts, casts, and renders a ready-to-post TikTok and Reels hook ad in minutes — no studio, no editor, no shoot.",
+    "Drop in a product link, screenshot, or a few notes. Hookline scripts, casts, and renders a ready-to-post TikTok and Reels hook ad in minutes — no studio, no editor, no shoot.",
   /** Short tagline for OG cards and the nav wordmark sub-label. */
   tagline: "The render room for short-form ads.",
-  twitter: "@hookmai",
+  twitter: "@hookline",
 } as const;
 
 /**

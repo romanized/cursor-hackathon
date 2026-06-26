@@ -130,7 +130,7 @@ export function Cta({ id, className }: SectionProps) {
         </h2>
 
         <p className="mt-6 max-w-[52ch] text-balance font-sans text-base text-muted md:text-lg">
-          Drop a product link below. Hookm scripts the hook, casts the creator,
+          Drop a product link below. Hookline scripts the hook, casts the creator,
           and renders a post-ready TikTok and Reels ad — while you watch.
         </p>
 

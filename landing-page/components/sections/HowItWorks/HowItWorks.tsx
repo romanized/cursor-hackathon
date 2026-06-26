@@ -39,7 +39,7 @@ const STEPS = [
     label: "Paste",
     title: "Drop the product in",
     blurb:
-      "A link, a screenshot, or a few notes. Hookm reads the page, pulls the angle, and locks the brief.",
+      "A link, a screenshot, or a few notes. Hookline reads the page, pulls the angle, and locks the brief.",
     glyph: "paste",
   },
   {
