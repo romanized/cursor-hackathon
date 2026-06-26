@@ -3,7 +3,7 @@
 import { Accent } from "@/components/accent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { env } from "@/lib/env";
+import { resolveAppUrl } from "@/lib/app-url";
 import { createClient } from "@/lib/supabase/client";
 import {
   ArrowRight02Icon,
@@ -36,7 +36,7 @@ export function AuthForm() {
         email,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(next)}`,
+          emailRedirectTo: `${resolveAppUrl()}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       });
       if (error) setError(error.message);
@@ -64,7 +64,7 @@ export function AuthForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(next)}`,
+          redirectTo: `${resolveAppUrl()}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       });
       if (error) setError(error.message);
