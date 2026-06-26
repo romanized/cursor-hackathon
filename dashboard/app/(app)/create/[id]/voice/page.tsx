@@ -12,6 +12,8 @@ export default async function VoiceStep({ params }: { params: Promise<{ id: stri
       .select("status, url, error")
       .eq("project_id", id)
       .eq("kind", "voiceover")
+      .is("beat_id", null)
+      .eq("status", "ready")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),

@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { TablesInsert } from "@/lib/db";
+import type { VoiceAlignment } from "@/lib/providers/elevenlabs";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
 
@@ -63,7 +64,7 @@ export async function assembleFinal(projectId: string) {
       .not("beat_id", "is", null),
     supabase
       .from("assets")
-      .select("id, beat_id, url, storage_path")
+      .select("id, beat_id, url, storage_path, meta")
       .eq("project_id", projectId)
       .eq("kind", "voiceover")
       .eq("status", "ready")
@@ -142,27 +143,25 @@ export async function assembleFinal(projectId: string) {
       }),
     );
 
-    // Captions: cumulative offsets per beat, sized to the voice (which now
-    // drives the final timeline).
-    let srtName: string | null = null;
+    // Captions: ASS with 2–3 word chunks + karaoke highlight, lower-third.
+    let assName: string | null = null;
     if (project?.captions) {
-      const cues: SrtCue[] = [];
-      let cursor = 0;
-      pairs.forEach((p, i) => {
-        const dur = probed[i].voiceDur;
-        const text = p.text?.trim();
-        if (text) cues.push({ start: cursor, end: cursor + dur, text });
-        cursor += dur;
-      });
+      const cues = buildCaptionCues(
+        pairs.map((p, i) => ({
+          text: p.text,
+          voiceDur: probed[i].voiceDur,
+          alignment: parseVoiceAlignment(p.voice.meta),
+        })),
+      );
       if (cues.length) {
-        srtName = "captions.srt";
-        await fs.writeFile(path.join(tmpDir, srtName), toSrt(cues), "utf8");
-        console.log("[assemble] captions", { cues: cues.length, totalSec: cursor });
+        assName = "captions.ass";
+        await fs.writeFile(path.join(tmpDir, assName), toAss(cues), "utf8");
+        console.log("[assemble] captions", { cues: cues.length });
       }
     }
 
     const outPath = path.join(tmpDir, "final.mp4");
-    await runFfmpeg(buildFfmpegArgs(probed, outPath, srtName), tmpDir);
+    await runFfmpeg(buildFfmpegArgs(probed, outPath, assName), tmpDir);
 
     const bytes = await fs.readFile(outPath);
     const remotePath = `${user.id}/${projectId}/final/${randomUUID()}.mp4`;
@@ -241,7 +240,7 @@ type ProbedPair = {
 function buildFfmpegArgs(
   pairs: ProbedPair[],
   outPath: string,
-  srtName: string | null,
+  assName: string | null,
 ): string[] {
   const args: string[] = ["-y"];
 
@@ -274,10 +273,9 @@ function buildFfmpegArgs(
   });
 
   const concatInputs = pairs.map((_, i) => `[v${i}][a${i}]`).join("");
-  // If captions: concat → [cv][outa], then burn subs into [cv] → [outv].
-  // Else: concat straight to [outv][outa].
-  const tail = srtName
-    ? `${concatInputs}concat=n=${pairs.length}:v=1:a=1[cv][outa];[cv]subtitles='${srtName}':force_style='FontName=Arial,Fontsize=34,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00000000&,BorderStyle=1,Outline=5,Shadow=1,Alignment=2,MarginV=180,Spacing=0.4'[outv]`
+  // If captions: concat → [cv][outa], then burn ASS subs into [cv] → [outv].
+  const tail = assName
+    ? `${concatInputs}concat=n=${pairs.length}:v=1:a=1[cv][outa];[cv]subtitles='${assName}'[outv]`
     : `${concatInputs}concat=n=${pairs.length}:v=1:a=1[outv][outa]`;
 
   const filterComplex = `${vFilters.join(";")};${aFilters.join(";")};${tail}`;
@@ -328,9 +326,147 @@ function runFfmpeg(args: string[], cwd?: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Captions
+// Captions — ASS, 3-word chunks, karaoke highlight, lower-third safe area.
 
-type SrtCue = { start: number; end: number; text: string };
+type AssCue = { start: number; end: number; text: string };
+type WordTiming = { word: string; start: number; end: number };
+const WORDS_PER_CHUNK = 3;
+
+function parseVoiceAlignment(meta: unknown): VoiceAlignment | null {
+  if (!meta || typeof meta !== "object") return null;
+  const alignment = (meta as { alignment?: VoiceAlignment }).alignment;
+  if (
+    !alignment?.characters?.length ||
+    alignment.characterStartTimesSeconds.length !== alignment.characters.length ||
+    alignment.characterEndTimesSeconds.length !== alignment.characters.length
+  ) {
+    return null;
+  }
+  return alignment;
+}
+
+function wordsFromAlignment(alignment: VoiceAlignment): WordTiming[] {
+  const { characters, characterStartTimesSeconds, characterEndTimesSeconds } = alignment;
+  const words: WordTiming[] = [];
+  let current = "";
+  let wordStart = 0;
+  let wordEnd = 0;
+
+  for (let i = 0; i < characters.length; i++) {
+    const ch = characters[i];
+    if (/\s/.test(ch)) {
+      if (current) words.push({ word: current, start: wordStart, end: wordEnd });
+      current = "";
+      continue;
+    }
+    if (!current) wordStart = characterStartTimesSeconds[i];
+    current += ch;
+    wordEnd = characterEndTimesSeconds[i];
+  }
+  if (current) words.push({ word: current, start: wordStart, end: wordEnd });
+  return words;
+}
+
+/** Fallback when alignment missing (pre-timestamp voice assets). */
+function estimateWordTimings(text: string, dur: number): WordTiming[] {
+  const parts = text.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return [];
+  const weights = parts.map((w) => Math.max(w.length, 1));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let t = 0;
+  return parts.map((word, i) => {
+    const slice = (weights[i] / total) * dur;
+    const start = t;
+    t += slice;
+    return { word, start, end: t };
+  });
+}
+
+function chunkWordTimings(words: WordTiming[], maxWords = WORDS_PER_CHUNK): WordTiming[][] {
+  const chunks: WordTiming[][] = [];
+  for (let i = 0; i < words.length; i += maxWords) {
+    chunks.push(words.slice(i, i + maxWords));
+  }
+  return chunks;
+}
+
+function escapeAssText(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\{/g, "\\{").replace(/\}/g, "\\}");
+}
+
+function buildKaraokeLine(words: WordTiming[]): string {
+  return words
+    .map((w) => {
+      const cs = Math.max(1, Math.round((w.end - w.start) * 100));
+      return `{\\k${cs}}${escapeAssText(w.word)}`;
+    })
+    .join(" ");
+}
+
+function buildCaptionCues(
+  beats: { text: string | null; voiceDur: number; alignment: VoiceAlignment | null }[],
+): AssCue[] {
+  const cues: AssCue[] = [];
+  let cursor = 0;
+  for (const beat of beats) {
+    const words = beat.alignment
+      ? wordsFromAlignment(beat.alignment)
+      : estimateWordTimings(beat.text ?? "", beat.voiceDur);
+    const chunks = chunkWordTimings(words);
+    for (const chunk of chunks) {
+      cues.push({
+        start: cursor + chunk[0].start,
+        end: cursor + chunk[chunk.length - 1].end,
+        text: buildKaraokeLine(chunk),
+      });
+    }
+    cursor += beat.voiceDur;
+  }
+  return cues;
+}
+
+function toAss(cues: AssCue[]): string {
+  const header = `[Script Info]
+Title: Hookm captions
+ScriptType: v4.00+
+WrapStyle: 0
+PlayResX: ${W}
+PlayResY: ${H}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial Black,46,&H00FFFFFF,&H0000FFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,2,1,2,48,48,140,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+  const lines = cues.map(
+    (c) =>
+      `Dialogue: 0,${assTs(c.start)},${assTs(c.end)},Default,,0,0,0,,${c.text}`,
+  );
+  return header + lines.join("\n") + "\n";
+}
+
+function assTs(secs: number): string {
+  const cs = Math.round(secs * 100);
+  const hh = Math.floor(cs / 360000);
+  const mm = Math.floor((cs % 360000) / 6000);
+  const ss = Math.floor((cs % 6000) / 100);
+  const cc = cs % 100;
+  const pad = (n: number, w: number) => String(n).padStart(w, "0");
+  return `${hh}:${pad(mm, 2)}:${pad(ss, 2)}.${pad(cc, 2)}`;
+}
+
+// ponytail: dev-only sanity check for alignment → word timing
+if (process.env.NODE_ENV !== "production") {
+  const words = wordsFromAlignment({
+    characters: ["t", "r", "a", "n", "s", "f", "o", "r", "m", " ", "y", "o", "u", "r"],
+    characterStartTimesSeconds: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65],
+    characterEndTimesSeconds: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7],
+  });
+  console.assert(words.length === 2 && words[0].word === "transform");
+}
 
 function probeDuration(file: string): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -354,18 +490,3 @@ function probeDuration(file: string): Promise<number> {
   });
 }
 
-function toSrt(cues: SrtCue[]): string {
-  return cues
-    .map((c, i) => `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${c.text}\n`)
-    .join("\n");
-}
-
-function ts(secs: number): string {
-  const ms = Math.round(secs * 1000);
-  const hh = Math.floor(ms / 3600000);
-  const mm = Math.floor((ms % 3600000) / 60000);
-  const ss = Math.floor((ms % 60000) / 1000);
-  const mss = ms % 1000;
-  const pad = (n: number, w: number) => String(n).padStart(w, "0");
-  return `${pad(hh, 2)}:${pad(mm, 2)}:${pad(ss, 2)},${pad(mss, 3)}`;
-}

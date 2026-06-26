@@ -8,22 +8,30 @@ function client() {
   return _client;
 }
 
+/** Character-level timing from ElevenLabs `convertWithTimestamps`. */
+export type VoiceAlignment = {
+  characters: string[];
+  characterStartTimesSeconds: number[];
+  characterEndTimesSeconds: number[];
+};
+
+export type VoiceoverResult = {
+  mp3: Buffer;
+  alignment: VoiceAlignment | null;
+};
+
 /**
- * Convert text to MP3 audio. Returns a Buffer ready to upload to Supabase Storage.
+ * Convert text to MP3 with character-level alignment for caption sync.
  * Per text-to-speech skill: eleven_turbo_v2_5 is the balanced quality/latency pick.
  */
-export async function synthesizeVoiceover(text: string): Promise<Buffer> {
-  const stream = await client().textToSpeech.convert(env.ELEVENLABS_VOICE_ID, {
+export async function synthesizeVoiceover(text: string): Promise<VoiceoverResult> {
+  const data = await client().textToSpeech.convertWithTimestamps(env.ELEVENLABS_VOICE_ID, {
     text,
     modelId: "eleven_turbo_v2_5",
     outputFormat: "mp3_44100_128",
   });
 
-  const chunks: Buffer[] = [];
-  // ElevenLabs returns a Web ReadableStream<Uint8Array>; Node 18+ supports
-  // async iteration on it but TS lib types don't reflect that — cast through unknown.
-  for await (const chunk of stream as unknown as AsyncIterable<Uint8Array>) {
-    chunks.push(Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
+  const mp3 = Buffer.from(data.audioBase64, "base64");
+  const alignment = data.alignment ?? data.normalizedAlignment ?? null;
+  return { mp3, alignment };
 }

@@ -70,7 +70,7 @@ export async function generateVoiceover(projectId: string) {
     narratable.map(async (beat) => {
       const assetId = assetByBeat.get(beat.id)!;
       try {
-        const mp3 = await synthesizeVoiceover(beat.text!);
+        const { mp3, alignment } = await synthesizeVoiceover(beat.text!);
         const path = `${user.id}/${projectId}/voice/${beat.id}.mp3`;
         const { error: upErr } = await svc.storage
           .from("media")
@@ -81,7 +81,12 @@ export async function generateVoiceover(projectId: string) {
           .createSignedUrl(path, 60 * 60 * 24);
         await supabase
           .from("assets")
-          .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
+          .update({
+            status: "ready",
+            storage_path: path,
+            url: signed?.signedUrl ?? null,
+            meta: alignment ? ({ alignment } as never) : null,
+          })
           .eq("id", assetId);
 
         try {

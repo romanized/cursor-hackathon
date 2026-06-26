@@ -9,9 +9,21 @@ export const maxDuration = 300;
 export default async function AssembleStep({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: clips }, { data: voice }, { data: existing }] = await Promise.all([
-    supabase.from("assets").select("id").eq("project_id", id).eq("kind", "clip").eq("status", "ready"),
-    supabase.from("assets").select("id, url").eq("project_id", id).eq("kind", "voiceover").eq("status", "ready").maybeSingle(),
+  const [{ data: clips }, { data: voices }, { data: existing }] = await Promise.all([
+    supabase
+      .from("assets")
+      .select("id, beat_id")
+      .eq("project_id", id)
+      .eq("kind", "clip")
+      .eq("status", "ready")
+      .not("beat_id", "is", null),
+    supabase
+      .from("assets")
+      .select("id, beat_id")
+      .eq("project_id", id)
+      .eq("kind", "voiceover")
+      .eq("status", "ready")
+      .not("beat_id", "is", null),
     supabase
       .from("assets")
       .select("id")
@@ -20,6 +32,11 @@ export default async function AssembleStep({ params }: { params: Promise<{ id: s
       .eq("status", "ready")
       .maybeSingle(),
   ]);
+
+  const clipBeatIds = new Set(clips?.map((c) => c.beat_id).filter((id): id is string => Boolean(id)));
+  const voiceBeatIds = new Set(voices?.map((v) => v.beat_id).filter((id): id is string => Boolean(id)));
+  const hasVoice =
+    clipBeatIds.size > 0 && [...clipBeatIds].every((beatId) => voiceBeatIds.has(beatId));
 
   return (
     <div className="flex flex-col gap-8">
@@ -36,7 +53,7 @@ export default async function AssembleStep({ params }: { params: Promise<{ id: s
       <AssemblePanel
         projectId={id}
         clipCount={clips?.length ?? 0}
-        hasVoice={Boolean(voice)}
+        hasVoice={hasVoice}
         hasFinal={Boolean(existing)}
       />
     </div>
