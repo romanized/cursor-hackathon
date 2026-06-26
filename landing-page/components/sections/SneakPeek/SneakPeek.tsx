@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useRef } from "react";
+import { Bricolage_Grotesque, Instrument_Serif } from "next/font/google";
+import { useRef, type CSSProperties, type ReactNode } from "react";
 import { useScrollScene } from "@/hooks/useScrollScene";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { SCROLL_MARKERS } from "@/lib/gsap/scrollTrigger";
-import { Container, Eyebrow, Timecode } from "@/components/ui";
+import { Container } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import { SECTIONS } from "@/lib/constants/site";
 import type { SectionProps } from "@/types";
@@ -17,31 +18,29 @@ import {
 /**
  * SNEAK-PEEK — "Inside the studio".
  *
- * The section that immediately follows the pinned hero. Its signature is a small
- * but clearly-VISIBLE rounded-top LIP that peeks above the fold at the BOTTOM of
- * the hero viewport FROM PAGE LOAD — before any scroll — hinting at the Hookm
- * studio panel below. As the user scrolls out of the hero, a premium, compact
- * mock of the Hookm DASHBOARD rises and resolves into full view, and the fixed
- * lip hands off to the real panel's identical lip — an invisible swap.
+ * The section that immediately follows the pinned hero. It is a little WINDOW INTO
+ * THE REAL HOOKM PRODUCT: a faithful, premium mimic of the dashboard's Step-01
+ * "Pick a format" screen. Because it is the product, the panel adopts the REAL
+ * dashboard aesthetic — warm near-black (#0a0606) + RED (#ef4444) accent — which
+ * is DELIBERATELY different from the landing page's Studio Black + lime. That
+ * palette (and the Bricolage / Instrument-Serif type) is scoped to the panel via
+ * the `.hookm-demo` wrapper's local CSS vars + arbitrary Tailwind values, so the
+ * red NEVER leaks into the landing chrome (hero CTA + progress hairline stay lime;
+ * cobalt stays Pipeline-only).
  *
- * THE DASHBOARD (representative, not 1:1) models the product's real 8-step
- * workflow (see context/PROJECT.md): 1 Template, 2 Product/Brief, 3 Script,
- * 4 Images, 5 Voice, 6 Clips, 7 Assemble, 8 Film. It is rendered as a real app
- * frame: a top toolbar (project name + ghost controls), a left STEPPER of the 8
- * steps with one active, a main work area showing the active step in progress
- * (Script + beat-breakdown with real storyboard frame renders), and a right live
- * preview. The active step here is "03 Script" — the most legible single screen
- * — with the downstream steps (Images / Clips / Film) shown queued/rendering so
- * the whole pipeline reads at a glance.
+ * Its signature is a seamless rounded panel-top TEASER that peeks above the fold
+ * at the BOTTOM of the hero viewport FROM PAGE LOAD — before any scroll. The
+ * teaser is the actual rounded top of the dashboard panel emerging from the
+ * black: a warm-dark surface, a soft top-edge light hairline so the rounded edge
+ * catches light, an ambient red-tinted glow so it "lifts" off the #050505 canvas,
+ * and a gradient fade at the very top so it BLENDS rather than presenting a hard
+ * bar. As the user scrolls out of the hero, the real dashboard panel rises and the
+ * fixed teaser hands off to the panel's identical rounded top — a seamless swap.
  *
- * PEEK-ON-LOAD mechanism: a `position:fixed`, viewport-bottom-anchored sliver
+ * PEEK-ON-LOAD mechanism: a `position:fixed`, viewport-bottom-anchored teaser
  * (z-30, below the z-50 nav, above the hero canvas) is rendered as the first
- * child. Because it is fixed to the viewport, it sits at the bottom of whatever
- * is on screen — the pinned hero on load — with NO dependency on scroll position.
- * It carries the EXACT rounded-top lip treatment the real panel carries, so when
- * the panel rises to meet it the swap is seamless. CONTRAST FIX: the lip uses the
- * elevated `bg-surface-2` (#16161A, clearly lighter than the #050505 canvas), a
- * strong top hairline, and a soft top glow so the rounded edge always reads.
+ * child. Because it is fixed to the viewport, it sits at the bottom of whatever is
+ * on screen — the pinned hero on load — with NO dependency on scroll position.
  *
  * HANDOFF: the hero is the only pin (`pinSpacing:true`); after it releases, normal
  * scroll resumes exactly at the bottom of the pinned viewport and this section
@@ -49,14 +48,9 @@ import {
  * is a NON-pinned scrub (start 'top bottom', end 'top 30%'), so it adds no pinned
  * length of its own.
  *
- * ACCENT LOCK: ZERO lime, ZERO cobalt anywhere in this section. Every control,
- * stepper node, status chip and pill is mono on fg/muted/hairline; the ghost
- * "Generate" control is a surface chip (NOT a primary CTA). Cobalt stays
- * Pipeline-only; the lime budget is untouched.
- *
- * REDUCED MOTION / MOBILE: a calm static fork — the panel is fully visible at
- * rest and the fixed sliver is retired (faded + non-interactive), so the demo
- * reads without any fixed/scroll trickery.
+ * REDUCED MOTION / MOBILE: a calm static fork — the panel is fully visible at rest
+ * and the fixed teaser is retired (faded + non-interactive), so the demo reads
+ * without any fixed/scroll trickery.
  */
 export type SneakPeekProps = SectionProps;
 
@@ -64,68 +58,133 @@ export type SneakPeekProps = SectionProps;
 const META = SECTIONS.find((s) => s.id === "sneak-peek");
 
 /**
- * The product's real 8-step workflow (context/PROJECT.md). The dashboard stepper
- * renders all eight; `status` drives the mono node glyph (done · active · queued)
- * so the whole pipeline reads at a glance with one step open in the work area.
+ * Fonts scoped to the demo panel so it reads as the real Hookm app without
+ * touching app/layout.tsx. next/font is a build-time transform that works in
+ * client components; both faces are exposed as CSS vars wired into `.hookm-demo`.
  */
-const WORKFLOW = [
-  { step: "01", label: "Template", status: "done" },
-  { step: "02", label: "Product / Brief", status: "done" },
-  { step: "03", label: "Script", status: "active" },
-  { step: "04", label: "Images", status: "render" },
-  { step: "05", label: "Voice", status: "queued" },
-  { step: "06", label: "Clips", status: "queued" },
-  { step: "07", label: "Assemble", status: "queued" },
-  { step: "08", label: "Film", status: "queued" },
-] as const;
+const bricolage = Bricolage_Grotesque({
+  variable: "--hk-font-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
+const instrument = Instrument_Serif({
+  variable: "--hk-font-serif",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["italic", "normal"],
+  display: "swap",
+});
 
 /**
- * The Script step's beat-breakdown — voiceover line + per-beat visual prompt,
- * each mapped to a real storyboard frame render (poster thumb). This is the
- * heart of the "Script + Images" view the dashboard shows in progress.
+ * The real dashboard's design tokens (app/globals.css `@theme`), pinned as local
+ * CSS vars on the demo wrapper. Using local vars (NOT the landing's `--color-*`)
+ * keeps the warm-black + RED palette fully contained to this panel.
  */
-const BEATS = [
-  {
-    beat: "01",
-    role: "Hook",
-    line: "POV: you found the bottle that does the work for you.",
-    poster: "skeleton_1",
-    state: "done",
-  },
-  {
-    beat: "02",
-    role: "Demo",
-    line: "One twist, self-cleans, keeps cold for 24 hours.",
-    poster: "simpson_1",
-    state: "done",
-  },
-  {
-    beat: "03",
-    role: "Proof",
-    line: "12,000 people swapped their old bottle this month.",
-    poster: "skeleton_2",
-    state: "render",
-  },
-  {
-    beat: "04",
-    role: "CTA",
-    line: "Tap the link before the restock sells out again.",
-    poster: "simpson_2",
-    state: "queued",
-  },
+const DEMO_VARS = {
+  "--hk-bg": "#0a0606",
+  "--hk-surface": "#15100f",
+  "--hk-surface-elev": "#1c1716",
+  "--hk-border": "rgba(255, 255, 255, 0.06)",
+  "--hk-border-strong": "rgba(255, 255, 255, 0.12)",
+  "--hk-text": "#ededed",
+  "--hk-muted": "#8a8584",
+  "--hk-faint": "#5a5554",
+  "--hk-accent": "#ef4444",
+  "--hk-accent-soft": "#f87171",
+  "--hk-accent-dim": "#7a1d1d",
+  "--hk-glow": "0 24px 80px -20px rgba(239, 68, 68, 0.45)",
+  // Radii from the real dashboard tokens (--radius-lg 14px, --radius-xl 22px).
+  "--hk-radius-lg": "14px",
+  "--hk-radius-xl": "22px",
+} as CSSProperties;
+
+/**
+ * The product's real 8-step workflow (lib/steps.ts in the dashboard). The step
+ * strip renders all eight with 01 Template active (filled RED node); the rest are
+ * outlined/muted. Captions match the real strip.
+ */
+const STEPS = [
+  { idx: "01", label: "Template", caption: "Pick a format", state: "active" },
+  { idx: "02", label: "Product", caption: "Your brief", state: "idle" },
+  { idx: "03", label: "Script", caption: "Hook & beats", state: "idle" },
+  { idx: "04", label: "Images", caption: "Frame render", state: "idle" },
+  { idx: "05", label: "Voice", caption: "Voiceover render", state: "idle" },
+  { idx: "06", label: "Clips", caption: "Motion clips", state: "idle" },
+  { idx: "07", label: "Assemble", caption: "Final cut", state: "idle" },
+  { idx: "08", label: "Film", caption: "Your footage", state: "idle" },
 ] as const;
 
-/** Brief chips (Step 2 settings) surfaced as context above the script. No accent. */
-const BRIEF = [
-  "Hook · 20s",
-  "Captions on",
-  "Gen Z",
-  "9:16",
+/** Sidebar WORKSPACE group (Create is the primary RED button). */
+const WORKSPACE = [
+  { label: "Create", primary: true },
+  { label: "Library", primary: false },
+  { label: "Products", primary: false },
+  { label: "Trends", primary: false },
+] as const;
+
+/** Sidebar ACCOUNT group. */
+const ACCOUNT = ["Account", "Usage and Billing"] as const;
+
+/**
+ * The six format cards from the real Step-01 picker. "Skeleton AI" is featured
+ * (MOST USED) and pre-SELECTED (red glow border + red play badge + red "Selected"
+ * underline). Descriptions echo the dashboard's one-line voice. A `poster` is used
+ * where a real frame render fits the visual.
+ */
+const FORMATS = [
+  {
+    name: "Skeleton AI",
+    description: "Cinematic skeleton avatars that mouth your hook to camera.",
+    overline: "Most used",
+    poster: "skeleton_1",
+    featured: true,
+    selected: true,
+  },
+  {
+    name: "Cartoon",
+    description: "Hand-styled 2D characters for a playful, scroll-stopping look.",
+    overline: "Format",
+    poster: "simpson_1",
+    featured: false,
+    selected: false,
+  },
+  {
+    name: "3D CGI",
+    description: "Photoreal 3D product renders with studio lighting and motion.",
+    overline: "Format",
+    poster: null,
+    featured: false,
+    selected: false,
+  },
+  {
+    name: "Animated body part",
+    description: "Talking hands and faces that demo the product up close.",
+    overline: "Format",
+    poster: "skeleton_2",
+    featured: false,
+    selected: false,
+  },
+  {
+    name: "AI Streamer",
+    description: "A virtual streamer reacting live to your offer on stream.",
+    overline: "Format",
+    poster: null,
+    featured: false,
+    selected: false,
+  },
+  {
+    name: "Pibble Dog",
+    description: "The viral pibble mascot delivering your line with attitude.",
+    overline: "Format",
+    poster: "simpson_2",
+    featured: false,
+    selected: false,
+  },
 ] as const;
 
 export function SneakPeek({ id, className }: SneakPeekProps) {
   const scopeRef = useRef<HTMLElement>(null);
-  // `null` (unresolved) is treated as reduced so the fixed-sliver trickery never
+  // `null` (unresolved) is treated as reduced so the fixed-teaser trickery never
   // flashes before the client confirms the user's motion preference.
   const reducedMotion = useReducedMotion() !== false;
 
@@ -171,231 +230,65 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
       )}
     >
       {/*
-        FIXED PEEK SLIVER — the signature. position:fixed, viewport-bottom, z-30
-        (below the z-50 nav, above the hero canvas). Present from FIRST PAINT, so a
-        clearly-visible rounded-top lip peeks above the fold at the bottom of the
-        pinned hero with no scroll dependency. CONTRAST FIX: bg-surface-2 (clearly
-        lighter than #050505), a strong top hairline + a soft top glow so the
-        rounded edge always reads against the black canvas. Carries the SAME lip
-        treatment as the real panel so the rise-to-meet swap is invisible.
-        aria-hidden + decorative. On the reduced-motion fork it is hidden (the
-        panel shows in flow), and the animation retires it as the panel arrives.
+        FIXED TEASER SLIP — the signature. position:fixed, viewport-bottom, z-30
+        (below the z-50 nav, above the hero canvas). Present + fully visible from
+        FIRST PAINT (no scroll dependency), so an UNMISTAKABLE rounded window peeks
+        above the fold at the bottom of the pinned hero. It is a clearly SEPARATE
+        color from the #050505 canvas (the dashboard's warm-dark #15100f surface)
+        with a visible RED top edge + red glow + a clear rounded-t-[22px], so it
+        plainly reads as "a real window peeking up". The animation retires it (fade
+        + non-interactive) as the real panel rises to take its place; the static
+        fork hides it entirely. aria-hidden + decorative.
       */}
       <div
-        data-sneak="sliver"
+        data-sneak="teaser"
         aria-hidden
+        style={DEMO_VARS}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-6xl flex-col items-center px-4 sm:px-6",
+          "hookm-demo pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 sm:px-6",
+          bricolage.variable,
+          instrument.variable,
         )}
       >
-        <PanelLip label="HOOKM STUDIO · preview" floating />
+        <TeaserSlip />
       </div>
 
       <Container>
-        {/* Section header rides above the rising panel. */}
+        {/* Section header rides above the rising panel — landing-page Studio Black
+            type/voice (NO red here; red lives only inside the demo panel). No
+            numbered eyebrow/kicker chrome — just the headline + supporting copy. */}
         <div className="mb-8 flex flex-col items-center text-center md:mb-12">
-          <Eyebrow index="01">{META?.eyebrow ?? "Inside the studio"}</Eyebrow>
-          <h2 className="mt-5 max-w-[18ch] text-balance font-sans text-[clamp(2rem,4.5vw,4rem)] font-medium leading-[0.98] tracking-tighter text-fg">
-            The render room, before you press go.
+          <h2 className="max-w-[18ch] text-balance font-sans text-[clamp(2rem,4.5vw,4rem)] font-medium leading-[0.98] tracking-tighter text-fg">
+            A real window into the studio.
           </h2>
           <p className="mt-5 max-w-[52ch] text-pretty font-sans text-base text-muted md:text-lg">
-            Paste a product link and Hookm walks the eight-step studio — template,
-            brief, script, frames, voice, clips, cut — into one finished hook ad.
+            This is the actual Hookm dashboard. Paste a product link, pick a hook
+            format, and the eight-step studio renders a finished ad.
           </p>
         </div>
 
-        {/* THE RISING DASHBOARD PANEL — the deliverable demo. */}
+        {/* THE RISING DASHBOARD PANEL — a faithful mimic of the real app, in the
+            real app's warm-black + RED palette, scoped via `.hookm-demo`. */}
         <div
           data-sneak="panel"
-          className="relative mx-auto w-full max-w-6xl will-change-transform"
+          style={DEMO_VARS}
+          className={cn(
+            "hookm-demo relative mx-auto w-full max-w-6xl will-change-transform",
+            bricolage.variable,
+            instrument.variable,
+          )}
         >
-          {/* The panel's OWN top lip — identical to the fixed sliver, so the swap
-              is invisible when the panel rises to meet it. */}
-          <div className="rounded-t-frame border-x border-t border-hairline-strong bg-surface-2 px-6 pt-3">
-            <PanelLip label="HOOKM STUDIO · generate" />
-          </div>
+          {/* The panel's OWN seamless rounded top — identical to the fixed teaser,
+              so the swap is invisible when the panel rises to meet it. */}
+          <PanelTop label="Hookm Studio" />
 
-          {/* TOP TOOLBAR — traffic-light dots + project name + faux step counter +
-              a GHOST Generate control (NOT a primary CTA → no lime). */}
-          <div
-            data-sneak="reveal"
-            className="flex items-center gap-3 border-x border-hairline-strong bg-surface-2 px-5 py-3"
-          >
-            <span className="flex items-center gap-1.5" aria-hidden>
-              <span className="h-2.5 w-2.5 rounded-pill border border-hairline-strong bg-surface" />
-              <span className="h-2.5 w-2.5 rounded-pill border border-hairline-strong bg-surface" />
-              <span className="h-2.5 w-2.5 rounded-pill border border-hairline-strong bg-surface" />
-            </span>
-            <span className="ml-1 hidden h-4 w-px bg-hairline-strong sm:block" />
-            <span className="truncate font-sans text-sm font-medium text-fg">
-              Aurora Bottle
-            </span>
-            <span className="truncate font-mono text-[0.625rem] uppercase leading-none tracking-[0.18em] text-muted">
-              · Skeleton AI
-            </span>
-            <span className="ml-auto hidden items-center gap-2 sm:inline-flex">
-              <Timecode chip>Step 3 / 8</Timecode>
-              <Timecode chip>Autosaved</Timecode>
-            </span>
-            {/* Ghost/surface chip — explicitly NOT a lime primary CTA. */}
-            <span className="ml-auto inline-flex items-center gap-2 rounded-pill border border-hairline-strong bg-surface px-3 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-fg sm:ml-2">
-              <PlayGlyph />
-              Generate
-            </span>
-          </div>
-
-          {/* PANEL BODY — sidebar stepper · main work area · live preview. */}
-          <div className="grid grid-cols-1 gap-5 rounded-b-frame border border-hairline-strong bg-surface p-5 shadow-[0_40px_120px_-60px_rgba(0,0,0,0.95)] lg:grid-cols-[208px_minmax(0,1fr)_184px] lg:gap-6 lg:p-7">
-            {/* LEFT — the 8-step workflow stepper. The product's real pipeline. */}
-            <nav
-              aria-label="Studio steps"
-              className="flex flex-col gap-3"
-            >
-              <RailLabel>Workflow</RailLabel>
-              <ol className="flex flex-col gap-1">
-                {WORKFLOW.map((s, i) => (
-                  <li key={s.step} data-sneak="reveal">
-                    <StepRow
-                      index={s.step}
-                      label={s.label}
-                      status={s.status}
-                      last={i === WORKFLOW.length - 1}
-                    />
-                  </li>
-                ))}
-              </ol>
-            </nav>
-
-            {/* CENTER — the active step (Script) in progress: voiceover script,
-                brief context, and the per-beat breakdown with frame renders. */}
-            <div className="flex min-w-0 flex-col gap-5">
-              {/* Active-step header + brief chips (Step 2 settings). */}
-              <div data-sneak="reveal" className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-[0.625rem] uppercase tracking-[0.2em] text-muted">
-                      Step 03
-                    </span>
-                    <span className="h-3 w-px bg-hairline-strong" />
-                    <h3 className="font-sans text-base font-medium text-fg">
-                      Script &amp; beats
-                    </h3>
-                  </div>
-                  <Timecode>Draft v3</Timecode>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {BRIEF.map((chip) => (
-                    <span
-                      key={chip}
-                      className="inline-flex items-center gap-1.5 rounded-pill border border-hairline bg-surface-2 px-2.5 py-1 font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-muted"
-                    >
-                      <span className="h-1 w-1 rounded-pill bg-fg/40" />
-                      {chip}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Voiceover script card — the spoken line, then mock caption bars. */}
-              <div
-                data-sneak="reveal"
-                className="flex flex-col gap-3 rounded-[0.9rem] border border-hairline bg-surface-2 p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <RailLabel>Voiceover</RailLabel>
-                  <span className="inline-flex items-center gap-1.5 font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-muted">
-                    <WaveGlyph />
-                    0:18 runtime
-                  </span>
-                </div>
-                <p className="font-sans text-sm leading-relaxed text-fg/85">
-                  &ldquo;Stop overpaying for water bottles that quit by noon — this
-                  one keeps ice for a full day, cleans itself, and never leaks in
-                  your bag.&rdquo;
-                </p>
-                <div className="mt-1 flex flex-col gap-2">
-                  <ScriptLine width="94%" />
-                  <ScriptLine width="78%" />
-                  <ScriptLine width="61%" muted />
-                </div>
-              </div>
-
-              {/* Beat-breakdown — per-beat visual prompt + frame render thumb. The
-                  link between Script (3) and Images (4) in the real flow. */}
-              <div
-                data-sneak="reveal"
-                className="flex flex-col gap-3 rounded-[0.9rem] border border-hairline bg-surface-2 p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <RailLabel>Beat breakdown</RailLabel>
-                  <span className="font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-muted">
-                    4 beats
-                  </span>
-                </div>
-                <ol className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  {BEATS.map((b) => (
-                    <li key={b.beat}>
-                      <BeatCard
-                        beat={b.beat}
-                        role={b.role}
-                        line={b.line}
-                        poster={b.poster}
-                        state={b.state}
-                      />
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              {/* Render-queue status — downstream steps in flight (NO accent). */}
-              <div
-                data-sneak="reveal"
-                className="flex flex-wrap items-center gap-2.5"
-              >
-                <span className="inline-flex items-center gap-2 rounded-pill border border-hairline-strong bg-surface-2 px-3 py-1.5 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-fg">
-                  <PulseDot />
-                  Rendering frames · 3 / 4
-                </span>
-                <Timecode chip>Voice queued</Timecode>
-                <Timecode chip>Est. 38s</Timecode>
-              </div>
-            </div>
-
-            {/* RIGHT — vertical phone live preview of the assembling film. */}
-            <div data-sneak="reveal" className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <RailLabel>Preview</RailLabel>
-                <span className="font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-muted">
-                  08 · Film
-                </span>
-              </div>
-              <div className="relative aspect-[9/16] w-full overflow-hidden rounded-[1rem] border border-hairline-strong bg-surface-2 shadow-[0_30px_90px_-50px_rgba(0,0,0,0.9)]">
-                <Image
-                  src="/videos/posters/skeleton_3.jpg"
-                  alt="Preview of the generated vertical hook ad"
-                  fill
-                  sizes="(min-width: 1024px) 184px, 60vw"
-                  className="object-cover"
-                />
-                {/* Rendered-texture grain + a quiet grade so it reads as a render. */}
-                <span className="render-grain pointer-events-none absolute inset-0 opacity-60" />
-                <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
-                {/* On-beat caption mock pinned low, like the real export. */}
-                <span className="absolute inset-x-3 bottom-7 z-10 text-center font-sans text-[0.6875rem] font-semibold leading-tight text-fg drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
-                  keeps ice for 24 hours
-                </span>
-                {/* A neutral scrub hairline (NOT the page's lime scrubber). */}
-                <div className="absolute inset-x-3 bottom-3 z-10 h-px bg-hairline">
-                  <span className="absolute inset-y-0 left-0 w-[42%] bg-hairline-strong" />
-                </div>
-                <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 font-mono text-[0.5rem] uppercase tracking-[0.2em] text-muted">
-                  <span className="h-1.5 w-1.5 rounded-pill bg-fg/60" />
-                  9:16 · live
-                </span>
-              </div>
-              <span className="font-mono text-[0.5625rem] uppercase leading-relaxed tracking-[0.14em] text-muted">
-                Assembling beats 1–4 into the final cut
-              </span>
+          {/* THE APP FRAME — left sidebar · main work area. Warm-black bg, the real
+              dashboard's borders + surfaces. */}
+          <div className="grid grid-cols-1 overflow-hidden rounded-b-[var(--hk-radius-xl)] border-x border-b border-[var(--hk-border-strong)] bg-[var(--hk-bg)] shadow-[0_50px_140px_-60px_rgba(0,0,0,0.95)] lg:grid-cols-[228px_minmax(0,1fr)]">
+            <DemoSidebar />
+            <div className="flex min-w-0 flex-col">
+              <DemoStepStrip />
+              <DemoMain />
             </div>
           </div>
         </div>
@@ -405,237 +298,434 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
 }
 
 /**
- * The shared rounded-top lip content: a grab-handle pill + a mono label. Rendered
- * identically inside the fixed sliver AND atop the real panel so the rise-to-meet
- * handoff is an invisible swap.
- *
- * CONTRAST FIX: `floating` (the fixed sliver) wraps the lip in its OWN elevated
- * surface + strong hairline + soft top glow so it always reads against #050505.
- * The in-panel lip omits the wrapper (the panel already supplies the surface).
- * No accent.
+ * The seamless rounded panel-top atop the REAL rising panel. Carries the same
+ * geometry, RED top edge and grab handle as the fixed `TeaserSlip` header, so when
+ * the panel rises to meet the teaser the swap reads as one continuous surface.
  */
-function PanelLip({ label, floating = false }: { label: string; floating?: boolean }) {
-  const content = (
-    <div className="flex w-full flex-col items-center gap-2">
-      <span aria-hidden className="h-1 w-10 rounded-pill bg-fg/40" />
-      <span className="font-mono text-[0.625rem] uppercase leading-none tracking-[0.2em] text-fg/70">
+function PanelTop({ label }: { label: string }) {
+  return (
+    <div
+      className={cn(
+        "relative flex w-full flex-col items-center gap-2 rounded-t-[var(--hk-radius-xl)] border-x border-t-2 border-[var(--hk-accent)]/55 bg-[var(--hk-surface)] px-6 pb-3 pt-3.5",
+        // Inset top highlight so the rounded edge catches light + a soft red lift.
+        "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.10),0_-10px_30px_-12px_rgba(239,68,68,0.45)]",
+      )}
+    >
+      {/* Grab-handle pill — minimal, warm-light. */}
+      <span aria-hidden className="h-1 w-10 rounded-full bg-[var(--hk-text)]/25" />
+      {/* Tiny overline label, RED (the real app's accent). */}
+      <span className="font-[family-name:var(--hk-font-sans)] text-[10px] font-medium uppercase leading-none tracking-[0.18em] text-[var(--hk-accent)]">
         {label}
       </span>
     </div>
   );
-  if (!floating) return content;
-  return (
-    <div className="flex w-full flex-col items-center rounded-t-frame border-x border-t border-hairline-strong bg-surface-2 px-6 pb-3 pt-3 shadow-[0_-24px_60px_-30px_rgba(0,0,0,0.95),inset_0_1px_0_0_rgba(255,255,255,0.08)]">
-      {content}
-    </div>
-  );
 }
 
 /**
- * A single workflow step in the left stepper: a connected node (done · active ·
- * queued · rendering), the zero-padded index, and the label. Active reads as an
- * elevated, bordered surface row; others stay quiet. No accent — status is
- * carried by mono glyphs + fg-alpha, never lime/cobalt.
+ * FIX C — the fixed TEASER SLIP. A clearly-visible rounded window peeking up from
+ * the bottom of the viewport on page load, UNMISTAKABLY separate from the #050505
+ * canvas:
+ *
+ *   - A SEPARATE color: the dashboard's warm-dark surface (#15100f → #1c1716).
+ *   - A visible RED top edge (a 2px red top border) + an ambient RED glow lifting
+ *     the slip off the black, so the rounded shape and the window plainly stand out.
+ *   - A clear rounded-t-[22px] with a light inset top hairline so the curve reads.
+ *   - A NOTICEABLE SLIVER: ~9vh of window peeks above the fold (header lip + a strip
+ *     of panel body with a couple of skeleton rows), not a thin bar.
+ *
+ * It is pointer-events-none (decorative; its parent is too) and `data-sneak="teaser"`
+ * so the scene fades it out as the real panel rises into the same place. The body
+ * strip below the lip is masked with a downward fade so the bottom edge melts into
+ * the viewport rather than presenting a hard cut.
  */
-function StepRow({
-  index,
-  label,
-  status,
-  last,
-}: {
-  index: string;
-  label: string;
-  status: string;
-  last: boolean;
-}) {
-  const active = status === "active";
+function TeaserSlip() {
   return (
-    <div
-      className={cn(
-        "relative flex items-center gap-3 rounded-[0.7rem] px-2.5 py-2 transition-none",
-        active
-          ? "border border-hairline-strong bg-surface-2"
-          : "border border-transparent",
-      )}
-    >
-      {/* Node + connector spine. */}
-      <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-        {!last && (
+    <div className="relative w-full max-w-6xl">
+      {/* Ambient RED glow ABOVE the slip so the window lifts off the #050505 canvas
+          — the dashboard's signature accent, low-opacity, soft. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-6 -top-16 h-24 rounded-[40px] bg-[radial-gradient(60%_120%_at_50%_100%,rgba(239,68,68,0.28),rgba(239,68,68,0.08)_50%,transparent_75%)] blur-[6px]"
+      />
+
+      {/* THE WINDOW — warm-dark surface, RED top edge, rounded top, ambient red lift.
+          overflow-hidden keeps the bottom open into the viewport. translate-y pushes
+          the lower portion off the fold so a controlled ~9vh sliver peeks up. */}
+      <div
+        className={cn(
+          "relative translate-y-[34px] overflow-hidden rounded-t-[var(--hk-radius-xl)] border-x border-t-2 border-[var(--hk-accent)] bg-[var(--hk-surface)]",
+          // The lift: a red ambient shadow above + a deep base shadow below so the
+          // slip clearly reads as a lifted, separate window.
+          "shadow-[0_-12px_40px_-8px_rgba(239,68,68,0.45),inset_0_1px_0_0_rgba(255,255,255,0.12)]",
+        )}
+      >
+        {/* Header lip — grab handle + RED label, matching the real PanelTop. */}
+        <div className="flex flex-col items-center gap-2 px-6 pb-3 pt-3.5">
           <span
             aria-hidden
-            className="absolute left-1/2 top-[calc(50%+0.6rem)] h-[calc(100%+0.2rem)] w-px -translate-x-1/2 bg-hairline"
+            className="h-1 w-10 rounded-full bg-[var(--hk-text)]/25"
           />
-        )}
-        <StepNode status={status} />
-      </span>
-      <span className="flex min-w-0 items-baseline gap-2">
-        <span
-          className={cn(
-            "font-mono text-[0.5625rem] uppercase tracking-[0.16em]",
-            active ? "text-fg/70" : "text-muted",
-          )}
-        >
-          {index}
-        </span>
-        <span
-          className={cn(
-            "truncate font-sans text-[0.8125rem]",
-            active ? "font-medium text-fg" : "text-muted",
-          )}
-        >
-          {label}
-        </span>
-      </span>
-      {status === "render" && (
-        <span className="ml-auto shrink-0 font-mono text-[0.5rem] uppercase tracking-[0.16em] text-muted">
-          •••
-        </span>
-      )}
-    </div>
-  );
-}
+          <span className="font-[family-name:var(--hk-font-sans)] text-[10px] font-medium uppercase leading-none tracking-[0.18em] text-[var(--hk-accent)]">
+            Hookm Studio · preview
+          </span>
+        </div>
 
-/** The stepper's status node glyph — done (check) · active (ring) · queued (dot). */
-function StepNode({ status }: { status: string }) {
-  if (status === "done") {
-    return (
-      <span className="flex h-5 w-5 items-center justify-center rounded-pill border border-hairline-strong bg-surface-2 text-fg/70">
-        <svg viewBox="0 0 12 12" aria-hidden className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2.5 6.2 5 8.5 9.5 3.5" />
-        </svg>
-      </span>
-    );
-  }
-  if (status === "active") {
-    return (
-      <span className="flex h-5 w-5 items-center justify-center rounded-pill border border-fg/50 bg-surface">
-        <span className="h-1.5 w-1.5 rounded-pill bg-fg/80" />
-      </span>
-    );
-  }
-  if (status === "render") {
-    return (
-      <span className="relative flex h-5 w-5 items-center justify-center rounded-pill border border-hairline-strong bg-surface">
-        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-pill bg-fg/30" />
-        <span className="relative h-1.5 w-1.5 rounded-pill bg-fg/60" />
-      </span>
-    );
-  }
-  return (
-    <span className="flex h-5 w-5 items-center justify-center rounded-pill border border-hairline bg-surface">
-      <span className="h-1 w-1 rounded-pill bg-muted" />
-    </span>
+        {/* A strip of panel body so a NOTICEABLE sliver of "real window" peeks up.
+            A faint red wash + a couple of skeleton rows hint at the dashboard
+            below, then a downward fade melts the bottom into the viewport. */}
+        <div className="relative border-t border-[var(--hk-border)] bg-[var(--hk-bg)] px-6 pb-10 pt-4">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_120%_at_50%_0%,rgba(239,68,68,0.10),transparent_70%)]"
+          />
+          <div className="relative flex items-center gap-3">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--hk-accent)] shadow-[0_0_8px_1px_rgba(239,68,68,0.6)]" />
+            <span className="h-2 w-28 rounded-full bg-[var(--hk-text)]/15" />
+            <span className="ml-auto h-2 w-16 rounded-full bg-[var(--hk-text)]/10" />
+          </div>
+          <div className="relative mt-3 flex gap-3">
+            <span className="h-8 flex-1 rounded-[10px] bg-[var(--hk-surface-elev)]" />
+            <span className="h-8 flex-1 rounded-[10px] bg-[var(--hk-surface-elev)]" />
+            <span className="hidden h-8 flex-1 rounded-[10px] bg-[var(--hk-surface-elev)] sm:block" />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 /**
- * A single beat card in the breakdown: a real frame-render thumb (poster), the
- * beat role + visual-prompt line, and a tiny render-state badge. Maps the Script
- * step's beats to the Images step's frames. No accent.
+ * LEFT SIDEBAR — mimics components/sidebar.tsx: "hookm." wordmark (red period),
+ * WORKSPACE group (Create primary RED w/ glow, Library, Products, Trends), ACCOUNT
+ * group (Account, Usage and Billing), a generic PLAN card (Pro / unlimited renders,
+ * no credits count), and a neutral "Hookm Studio · Live preview" demo chip. The
+ * personal account identity (avatar, username, role, socials) is intentionally
+ * stripped so the panel reads as a product DEMO, not a logged-in user's screen.
  */
-function BeatCard({
-  beat,
-  role,
-  line,
-  poster,
-  state,
+function DemoSidebar() {
+  return (
+    <aside
+      data-sneak="reveal"
+      aria-label="Studio navigation"
+      className="hidden flex-col border-r border-[var(--hk-border)] bg-[var(--hk-surface)]/40 px-5 py-6 lg:flex"
+    >
+      <span className="mb-9 font-[family-name:var(--hk-font-sans)] text-xl font-semibold tracking-tight text-[var(--hk-text)]">
+        hookm
+        <span className="text-[var(--hk-accent)]">.</span>
+      </span>
+
+      <SideGroupLabel>Workspace</SideGroupLabel>
+      <nav className="flex flex-col gap-1">
+        {WORKSPACE.map((item) => (
+          <SideRow key={item.label} label={item.label} primary={item.primary} />
+        ))}
+      </nav>
+
+      <SideGroupLabel className="mt-8">Account</SideGroupLabel>
+      <nav className="flex flex-col gap-1">
+        {ACCOUNT.map((label) => (
+          <SideRow key={label} label={label} />
+        ))}
+      </nav>
+
+      <div className="mt-auto flex flex-col gap-3 pt-8">
+        {/* DEMO/PLAN card — generic, no personal account data. A neutral plan
+            label + a quiet "Live preview" status; no credits count, no Subscribe
+            CTA, no user identity. Reads as a product DEMO, not a logged-in screen. */}
+        <div className="rounded-[var(--hk-radius-lg)] border border-[var(--hk-border)] p-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="font-[family-name:var(--hk-font-sans)] text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--hk-muted)]">
+              Plan
+            </span>
+            <span className="inline-flex h-6 items-center rounded-full border border-[var(--hk-accent)]/40 bg-[rgba(239,68,68,0.10)] px-2.5 font-[family-name:var(--hk-font-sans)] text-[11px] font-medium text-[var(--hk-accent-soft)]">
+              Pro
+            </span>
+          </div>
+          <p className="font-[family-name:var(--hk-font-sans)] text-xs text-[var(--hk-muted)]">
+            Unlimited renders
+          </p>
+        </div>
+
+        {/* Demo workspace chip — a neutral product label with a live status dot,
+            standing in for the user/account chip (no avatar, name, role or
+            socials). */}
+        <div className="flex items-center gap-2.5">
+          <span
+            aria-hidden
+            className="relative grid size-8 place-items-center rounded-full border border-[var(--hk-border-strong)] bg-[var(--hk-surface-elev)]"
+          >
+            <span className="size-1.5 rounded-full bg-[var(--hk-accent)] shadow-[0_0_8px_1px_rgba(239,68,68,0.6)]" />
+          </span>
+          <div className="flex flex-col">
+            <span className="font-[family-name:var(--hk-font-sans)] text-xs font-medium text-[var(--hk-text)]">
+              Hookm Studio
+            </span>
+            <span className="font-[family-name:var(--hk-font-sans)] text-[10px] uppercase tracking-wider text-[var(--hk-faint)]">
+              Live preview
+            </span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function SideGroupLabel({
+  children,
+  className,
 }: {
-  beat: string;
-  role: string;
-  line: string;
-  poster: string;
-  state: string;
+  children: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-[0.7rem] border border-hairline bg-surface p-2.5">
-      <div className="relative aspect-[3/4] w-12 shrink-0 overflow-hidden rounded-[0.5rem] border border-hairline bg-surface-2">
-        <Image
-          src={`/videos/posters/${poster}.jpg`}
-          alt=""
-          aria-hidden
-          fill
-          sizes="48px"
-          className={cn("object-cover", state === "queued" ? "opacity-40" : "opacity-90")}
-        />
-        <span className="render-grain pointer-events-none absolute inset-0 opacity-50" />
-        {state === "render" && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <span className="h-1.5 w-1.5 animate-ping rounded-pill bg-fg/70" />
-          </span>
-        )}
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[0.5rem] uppercase tracking-[0.16em] text-muted">
-            {beat}
-          </span>
-          <span className="font-sans text-[0.6875rem] font-medium text-fg">
-            {role}
-          </span>
-          <BeatState state={state} />
-        </div>
-        <p className="line-clamp-2 font-sans text-[0.6875rem] leading-snug text-muted">
-          {line}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** A tiny mono render-state tag for a beat — done · rendering · queued. No accent. */
-function BeatState({ state }: { state: string }) {
-  const label = state === "done" ? "ready" : state === "render" ? "rendering" : "queued";
-  return (
-    <span className="ml-auto font-mono text-[0.5rem] uppercase tracking-[0.14em] text-muted">
-      {label}
-    </span>
-  );
-}
-
-/** A small mono rail label used above each panel column / card. No accent. */
-function RailLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="font-mono text-[0.5625rem] uppercase leading-none tracking-[0.22em] text-muted">
+    <span
+      className={cn(
+        "mb-3 font-[family-name:var(--hk-font-sans)] text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--hk-muted)]",
+        className,
+      )}
+    >
       {children}
     </span>
   );
 }
 
-/** A mock script "text" bar — fg-alpha, matches the AdCard caption-bar treatment. */
-function ScriptLine({ width, muted = false }: { width: string; muted?: boolean }) {
+function SideRow({ label, primary = false }: { label: string; primary?: boolean }) {
   return (
     <span
-      aria-hidden
-      className={cn("h-2 rounded-pill", muted ? "bg-fg/8" : "bg-fg/15")}
-      style={{ width }}
-    />
-  );
-}
-
-/** A quiet pulsing status dot for the render chip — fg-alpha, NEVER lime. */
-function PulseDot() {
-  return (
-    <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-pill bg-fg/40" />
-      <span className="relative inline-flex h-1.5 w-1.5 rounded-pill bg-fg/70" />
+      className={cn(
+        "flex items-center gap-3 rounded-[var(--hk-radius-lg)] px-3 py-2.5 font-[family-name:var(--hk-font-sans)] text-sm",
+        primary
+          ? "bg-[var(--hk-accent)] font-medium text-white shadow-[var(--hk-glow)]"
+          : "text-[var(--hk-muted)]",
+      )}
+    >
+      <NavGlyph primary={primary} />
+      <span>{label}</span>
     </span>
   );
 }
 
-/** Minimal "play" glyph for the ghost Generate chip (currentColor = fg). */
+/**
+ * TOP STEP STRIP — mimics components/step-strip.tsx: the 8 steps with a connecting
+ * hairline, 01 Template active as a filled RED numbered node (with soft pulse ring)
+ * and the rest outlined/muted. Each node carries the label + caption.
+ */
+function DemoStepStrip() {
+  return (
+    <div
+      data-sneak="reveal"
+      className="border-b border-[var(--hk-border)] bg-[var(--hk-bg)]/85 px-4 py-4 sm:px-6"
+    >
+      <div className="relative">
+        {/* The connecting hairline behind the nodes. */}
+        <span
+          aria-hidden
+          className="absolute left-6 right-6 top-[18px] h-px bg-[var(--hk-border)]"
+        />
+        <ol className="relative flex gap-4 overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-6">
+          {STEPS.map((step) => {
+            const active = step.state === "active";
+            return (
+              <li
+                key={step.idx}
+                className="flex min-w-[78px] flex-1 flex-col items-center text-center"
+              >
+                <span
+                  className={cn(
+                    "grid size-9 place-items-center rounded-full border font-[family-name:var(--hk-font-sans)] text-[12px] font-semibold",
+                    active
+                      ? "border-[var(--hk-accent)] bg-[var(--hk-accent)] text-white shadow-[0_0_0_4px_rgba(239,68,68,0.18)]"
+                      : "border-[var(--hk-border-strong)] bg-[var(--hk-surface)] text-[var(--hk-muted)]",
+                  )}
+                >
+                  {step.idx}
+                </span>
+                <span
+                  className={cn(
+                    "mt-2 font-[family-name:var(--hk-font-sans)] text-[12px] font-medium",
+                    active ? "text-[var(--hk-text)]" : "text-[var(--hk-muted)]",
+                  )}
+                >
+                  {step.label}
+                </span>
+                <span className="mt-1 font-[family-name:var(--hk-font-sans)] text-[10px] uppercase tracking-[0.18em] text-[var(--hk-muted)]">
+                  {step.caption}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * MAIN WORK AREA — the Step-01 picker: an overline + heading with an italic-serif
+ * RED accent word (the dashboard's `.accent`), a Video/Slideshow toggle (Video
+ * active = red pill), "6 formats available", and the grid of FORMAT CARDS.
+ */
+function DemoMain() {
+  return (
+    <div className="relative flex flex-col gap-7 px-5 py-8 sm:px-8 sm:py-10">
+      {/* Ambient red wash behind the picker (the dashboard's `.ambient-red`). */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(239,68,68,0.10),transparent_70%)]"
+      />
+
+      <header data-sneak="reveal" className="relative flex flex-col gap-3">
+        <span className="font-[family-name:var(--hk-font-sans)] text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--hk-accent)]">
+          Template
+        </span>
+        <h3 className="font-[family-name:var(--hk-font-sans)] text-[clamp(1.5rem,2.6vw,2.25rem)] font-medium tracking-tight text-[var(--hk-text)]">
+          Pick a{" "}
+          <span className="font-[family-name:var(--hk-font-serif)] italic tracking-[-0.02em] text-[var(--hk-accent)]">
+            hook format.
+          </span>
+        </h3>
+        <p className="max-w-xl font-[family-name:var(--hk-font-sans)] text-sm leading-relaxed text-[var(--hk-muted)]">
+          The format decides the visual language of the final video. You can change
+          it any time before the script is locked.
+        </p>
+      </header>
+
+      {/* Video / Slideshow toggle + formats-available count. */}
+      <div
+        data-sneak="reveal"
+        className="relative flex items-center justify-between"
+      >
+        <div className="inline-flex rounded-full border border-[var(--hk-border)] bg-[var(--hk-surface)] p-1 text-sm">
+          <span className="rounded-full bg-[var(--hk-accent)] px-4 py-2 font-[family-name:var(--hk-font-sans)] text-white">
+            Video
+          </span>
+          <span className="rounded-full px-4 py-2 font-[family-name:var(--hk-font-sans)] text-[var(--hk-muted)]">
+            Slideshow
+          </span>
+        </div>
+        <span className="font-[family-name:var(--hk-font-sans)] text-xs text-[var(--hk-muted)]">
+          6 formats available
+        </span>
+      </div>
+
+      {/* FORMAT CARD GRID. */}
+      <div className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {FORMATS.map((f) => (
+          <FormatCard key={f.name} format={f} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A single FORMAT CARD — mimics the real template picker card + components/ui/card.
+ * Featured/selected (Skeleton AI) gets the red glow border, red play badge, and a
+ * red "Selected" underline; the rest are outlined surfaces with "Click to choose".
+ * Where a poster fits, a real frame render sits behind a soft gradient.
+ */
+function FormatCard({ format }: { format: (typeof FORMATS)[number] }) {
+  const { name, description, overline, poster, featured, selected } = format;
+  return (
+    <div
+      data-sneak="reveal"
+      className={cn(
+        "group relative flex aspect-[3/4] flex-col justify-between overflow-hidden rounded-[var(--hk-radius-xl)] border p-5 text-left",
+        selected
+          ? "border-[var(--hk-accent)] bg-[rgba(239,68,68,0.06)] shadow-[var(--hk-glow)]"
+          : "border-[var(--hk-border)] bg-[var(--hk-surface)]",
+      )}
+    >
+      {/* Poster frame render behind a graded wash, where a visual fits. */}
+      {poster ? (
+        <>
+          <Image
+            src={`/videos/posters/${poster}.jpg`}
+            alt=""
+            aria-hidden
+            fill
+            sizes="(min-width: 1024px) 240px, (min-width: 640px) 45vw, 90vw"
+            className="object-cover opacity-30"
+          />
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--hk-bg)] via-[var(--hk-bg)]/70 to-[var(--hk-bg)]/30" />
+        </>
+      ) : (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,rgba(248,113,113,0.08),transparent_60%)]"
+        />
+      )}
+
+      <div className="relative flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <span
+            className={cn(
+              "font-[family-name:var(--hk-font-sans)] text-[11px] font-medium uppercase tracking-[0.18em]",
+              featured ? "text-[var(--hk-accent)]" : "text-[var(--hk-muted)]",
+            )}
+          >
+            {overline}
+          </span>
+          <span className="font-[family-name:var(--hk-font-sans)] text-xl font-medium tracking-tight text-[var(--hk-text)]">
+            {name}
+          </span>
+        </div>
+        {selected && (
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[var(--hk-accent)] text-white">
+            <PlayGlyph />
+          </span>
+        )}
+      </div>
+
+      <div className="relative mt-auto">
+        <p className="mb-3 line-clamp-3 font-[family-name:var(--hk-font-sans)] text-sm leading-relaxed text-[var(--hk-muted)]">
+          {description}
+        </p>
+        {selected ? (
+          <span className="inline-flex flex-col font-[family-name:var(--hk-font-sans)] text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--hk-accent)]">
+            Selected
+            <span
+              aria-hidden
+              className="mt-1 h-px w-9 bg-[var(--hk-accent)]"
+            />
+          </span>
+        ) : (
+          <span className="font-[family-name:var(--hk-font-sans)] text-xs text-[var(--hk-faint)]">
+            Click to choose
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---- Minimal inline glyphs (currentColor) — no icon deps inside the panel. ---- */
+
+/** A generic nav-item glyph (outlined square) — primary rows tint it white. */
+function NavGlyph({ primary }: { primary: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 18 18"
+      aria-hidden
+      className={cn("h-4 w-4", primary ? "text-white" : "text-[var(--hk-muted)]")}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="2.5" y="2.5" width="13" height="13" rx="3.5" />
+      <path d="M6 9h6M9 6v6" />
+    </svg>
+  );
+}
+
+/** Minimal "play" glyph for the selected format badge (currentColor = white). */
 function PlayGlyph() {
   return (
-    <svg viewBox="0 0 12 12" aria-hidden className="h-2.5 w-2.5" fill="currentColor">
+    <svg viewBox="0 0 12 12" aria-hidden className="h-3 w-3" fill="currentColor">
       <path d="M3 2.2v7.6L9.5 6 3 2.2z" />
     </svg>
   );
 }
 
-/** Minimal "waveform" glyph for the voiceover label (currentColor = muted). */
-function WaveGlyph() {
-  return (
-    <svg viewBox="0 0 16 12" aria-hidden className="h-2.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-      <path d="M2 6h0M5 3.5v5M8 1.5v9M11 4v4M14 6h0" />
-    </svg>
-  );
-}

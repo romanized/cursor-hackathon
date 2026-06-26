@@ -113,53 +113,53 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     id: "c1",
     video: "skeleton_1",
     tick: "9:16",
-    // TOP-ish — visible at rest near the start of the track.
+    // TOP band, pushed HIGHER — visible at rest near the start of the track.
     leftVw: 22,
-    topVh: 32,
+    topVh: 27,
     scale: 1.0,
     rotateDeg: -3,
     driftVw: -2.5,
   },
   {
     id: "c2",
-    video: "skeleton_2",
+    video: "simpson_1",
     tick: "9:16",
-    // LOWER band, drifting toward center.
+    // LOWER band, pushed further DOWN, drifting toward center. (mixed order)
     leftVw: 70,
-    topVh: 60,
+    topVh: 70,
     scale: 0.95,
     rotateDeg: 2.5,
     driftVw: 1.5,
   },
   {
     id: "c3",
-    video: "skeleton_3",
+    video: "skeleton_2",
     tick: "9:16",
-    // HIGH / center apex of the ribbon.
+    // HIGH / center apex of the ribbon, pushed HIGHER. (mixed order)
     leftVw: 118,
-    topVh: 30,
+    topVh: 26,
     scale: 1.04,
     rotateDeg: 0,
     driftVw: -3,
   },
   {
     id: "c4",
-    video: "simpson_1",
+    video: "simpson_2",
     tick: "9:16",
-    // LOWER band, toward center (mirror of c2).
+    // LOWER band, pushed further DOWN, toward center (mirror of c2). (mixed order)
     leftVw: 166,
-    topVh: 60,
+    topVh: 70,
     scale: 0.95,
     rotateDeg: -2.5,
     driftVw: 1.5,
   },
   {
     id: "c5",
-    video: "simpson_2",
+    video: "skeleton_3",
     tick: "9:16",
-    // TOP-ish — sweeps in last (mirror of c1).
+    // TOP band, pushed HIGHER — sweeps in last (mirror of c1). (mixed order)
     leftVw: 210,
-    topVh: 32,
+    topVh: 27,
     scale: 1.0,
     rotateDeg: 3,
     driftVw: -2,

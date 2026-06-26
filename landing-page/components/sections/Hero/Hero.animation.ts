@@ -50,8 +50,10 @@ export const REEL = {
   text: '[data-reel="text"]',
   card: '[data-reel="card"]',
   progress: '[data-reel="progress"]',
-  /** The two stacked word slabs inside the headline's fixed-width swap slot. */
+  /** The two stacked word slabs inside the headline's min-content swap slot. */
   swap: '[data-reel="swap"]',
+  /** The min-content swap slot itself — its width tightens to the shown word. */
+  swapSlot: '[data-reel="swap-slot"]',
 } as const;
 
 /** A timeline-only builder: fills the scrubbed timeline `useScrollScene` owns. */
@@ -206,6 +208,7 @@ export function buildReelScene(
     //   horizontally (the fixed-width slot, sized to the wider "any product", holds
     //   the layout).
     const slabs = scoped<HTMLElement>(REEL.swap);
+    const slabSlot = scoped<HTMLElement>(REEL.swapSlot)[0];
     const slabA = slabs.find((s) => s.dataset.swap === "a");
     const slabB = slabs.find((s) => s.dataset.swap === "b");
     if (slabA && slabB) {
@@ -219,6 +222,27 @@ export function buildReelScene(
       tl.set(slabA, { yPercent: 100 }, 0.42);
       tl.to(slabB, { yPercent: -100, ease: "none", duration: 0.12 }, 0.62);
       tl.to(slabA, { yPercent: 0, ease: "none", duration: 0.12 }, 0.62);
+
+      // SLOT WIDTH TIGHTEN — the only non-transform tween here, and it exists to
+      // KILL THE DEAD GAP: the slot is min-content of slab A ("any product"), so
+      // when the word swaps to the shorter "any link" the slot would otherwise hold
+      // the wider "any product" width and leave a gap after "Turn". We measure both
+      // slabs' real rendered widths (responsive — recomputed on every refresh) and
+      // tween the slot's explicit width down to "any link" during swap 1 and back up
+      // during swap 2, in lockstep with the vertical slab swap. The CSS
+      // `transition-[width]` on the slot smooths any class-driven reset; this scrubbed
+      // tween is what keeps the centered line gap-free as the word changes.
+      if (slabSlot) {
+        const widthA = Math.ceil(slabA.getBoundingClientRect().width);
+        const widthB = Math.ceil(slabB.getBoundingClientRect().width);
+        if (widthA > 0 && widthB > 0) {
+          gsap.set(slabSlot, { width: widthA });
+          // Tighten to "any link" alongside swap 1 (word becomes "any link").
+          tl.to(slabSlot, { width: widthB, ease: "none", duration: 0.12 }, 0.3);
+          // Widen back to "any product" alongside swap 2 (word resolves).
+          tl.to(slabSlot, { width: widthA, ease: "none", duration: 0.12 }, 0.62);
+        }
+      }
     }
 
     // --- LIME PROGRESS HAIRLINE (locked lime use #2) -----------------------
@@ -295,6 +319,12 @@ export function applyReelStaticState(root: HTMLElement): () => void {
   slabs.forEach((s) => {
     gsap.set(s, { yPercent: s.dataset.swap === "a" ? 0 : 100 });
   });
+  // Drop any explicit slot width the pan path may have set, so the slot relaxes
+  // back to its min-content "any product" width (the resting word) on this fork.
+  const slabSlot = root.querySelector<HTMLElement>(REEL.swapSlot);
+  if (slabSlot) {
+    gsap.set(slabSlot, { clearProps: "width" });
+  }
 
   cards.forEach((el) => {
     gsap.set(el, {

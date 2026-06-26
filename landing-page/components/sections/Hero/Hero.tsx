@@ -40,9 +40,11 @@ import { buildReelScene, applyReelStaticState, REEL } from "./Hero.animation";
  * grid (posters under reduced motion; in-view autoplay loops on touch). Gated so
  * heavy motion never flashes pre-hydration (null reduced-motion treated as reduced).
  *
- * ACCENT LOCK: lime appears EXACTLY in the nav CTA + the hero block's primary CTA
- * (the SAME locked Button primary) + the single progress hairline. The five video
- * cards carry zero lime, zero cobalt.
+ * ACCENT LOCK: lime appears EXACTLY in the hero block's primary CTA ("Generate my
+ * first ad" — the SAME locked Button primary) + the single progress hairline. The
+ * nav now carries ZERO lime (its "Start rendering" button is the muted ghost
+ * variant), so there is ONE bold lime moment, not two. The five video cards carry
+ * zero lime, zero cobalt.
  */
 export function Hero({ id, className }: SectionProps) {
   const scopeRef = useRef<HTMLElement>(null);
@@ -315,27 +317,32 @@ function HeroBlock() {
 /**
  * The evolving middle word of the headline.
  *
- * A FIXED-WIDTH, baseline-aligned, overflow-clip slot holding two stacked slabs:
+ * A MIN-CONTENT, baseline-aligned, overflow-clip slot holding two stacked slabs in
+ * the SAME grid cell (col-start-1 row-start-1):
  *   - slab A ("any product") visible at rest (the initial + resolved wording),
  *   - slab B ("any link") parked below.
  * The scrubbed hero timeline translates the slabs vertically (yPercent) inside the
- * clip to swap the word: A -> B -> A, over generous scroll windows. Because the
- * slot has a FIXED width (sized to the widest word — "any product" is wider than
- * "any link", so the sizer stays "any product") and only the slabs move
- * vertically, the centered line never shifts horizontally — no reflow, no
- * letter-spacing / weight scrub (transform only). An invisible sizer span reserves
- * the width so the layout is stable from first paint.
+ * clip to swap the word: A -> B -> A. Only vertical transform moves the slabs, so
+ * the line never letter-spacing / weight scrubs (transform only).
+ *
+ * NO dead gap: there is NO fixed widest-word sizer. The slot itself is `w-max`
+ * (fit/min-content) so "Turn" hugs the CURRENT word with no empty space. Slab A is
+ * the lone IN-FLOW slab — it drives the slot's intrinsic width — while slab B is
+ * absolutely positioned so the parked word never inflates the slot to the wider
+ * word. When the scrubbed timeline swaps to the shorter "any link" it ALSO tweens
+ * the slot's explicit width (see `Hero.animation.ts`) so the line gently tightens
+ * instead of leaving the "any product"-sized gap; the `transition-[width]` keeps
+ * the static/reduced path and any width reset buttery. The whole h1 is centered, so
+ * tightening the slot just removes the gap and the line stays centered.
  */
 function HeadlineSwap() {
   return (
-    <span className="relative inline-grid overflow-hidden align-bottom text-fg">
-      {/* Invisible sizer: reserves the slot width to the WIDEST word so the slot
-          never resizes when the word changes. It also occupies the grid cell so
-          the line height is correct. */}
-      <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-nowrap">
-        any product
-      </span>
-      {/* Slab A — "any product" (visible at rest). */}
+    <span
+      data-reel="swap-slot"
+      className="relative inline-grid w-max overflow-hidden align-bottom text-fg transition-[width] duration-500 ease-[var(--ease-expo)]"
+    >
+      {/* Slab A — "any product" (visible at rest). The ONLY in-flow slab, so it
+          sizes the min-content slot; "Turn" hugs it with no dead gap. */}
       <span
         data-reel="swap"
         data-swap="a"
@@ -343,12 +350,13 @@ function HeadlineSwap() {
       >
         any product
       </span>
-      {/* Slab B — "any link" (parked below; rises in on swap 1). */}
+      {/* Slab B — "any link" (parked below; rises in on swap 1). Absolutely
+          positioned so the parked, wider/narrower word never inflates the slot. */}
       <span
         data-reel="swap"
         data-swap="b"
         aria-hidden
-        className="col-start-1 row-start-1 whitespace-nowrap"
+        className="absolute left-0 top-0 col-start-1 row-start-1 whitespace-nowrap"
       >
         any link
       </span>
@@ -358,32 +366,71 @@ function HeadlineSwap() {
 
 /**
  * The fixed nav pill — the ONLY surface allowed `backdrop-blur` (perf rule).
- * Wordmark on the left, a compact lime CTA on the right (the locked lime CTA use;
- * the SAME `Button` primary as the hero block, not a new lime surface). Sits above
+ *
+ * A polished product navbar: the "Hookm" wordmark + its mono tagline on the left,
+ * a row of quiet center/right nav links (text-muted -> hover:text-fg), and a MUTED
+ * ghost "Start rendering" button on the far right.
+ *
+ * ACCENT LOCK: the nav carries ZERO lime now. The button is the hairline `ghost`
+ * variant (not the lime fill), so the one bold lime moment lives only on the hero
+ * block's primary CTA ("Generate my first ad") + the progress hairline. Sits above
  * the pinned canvas (z-50) so the pin never clips it. Anchor links go through Lenis.
  */
+const NAV_LINKS = [
+  { label: "How it works", href: "#pipeline" },
+  { label: "Features", href: "#features" },
+  { label: "Render", href: "#render-pin" },
+] as const;
+
 function HeroNav() {
   const scrollToAnchor = useScrollToAnchor();
   return (
     <header className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-4">
       <nav
         aria-label="Primary"
-        className="flex w-full max-w-3xl items-center justify-between gap-4 rounded-pill border border-hairline bg-surface/60 py-2 pl-5 pr-2 backdrop-blur-xl"
+        className="flex w-full max-w-4xl items-center justify-between gap-4 rounded-pill border border-hairline bg-surface/60 py-2 pl-5 pr-2 backdrop-blur-xl"
       >
+        {/* Wordmark + mono tagline. */}
         <a
           href="#hero"
           onClick={(e) => {
             e.preventDefault();
             scrollToAnchor("#hero");
           }}
-          className="flex items-baseline gap-2 font-sans text-sm font-semibold tracking-tight text-fg"
+          className="flex shrink-0 items-baseline gap-2 font-sans text-sm font-semibold tracking-tight text-fg"
         >
           {SITE.name}
-          <span className="hidden font-mono text-[0.625rem] uppercase tracking-[0.18em] text-muted sm:inline">
+          <span className="hidden font-mono text-[0.625rem] uppercase tracking-[0.18em] text-muted lg:inline">
             {SITE.tagline}
           </span>
         </a>
-        <Button size="md" variant="primary" onClick={() => scrollToAnchor("#cta")}>
+
+        {/* Center/right nav links — quiet text, hover lifts to fg. Hidden on
+            narrow screens where the pill would crowd; the CTA stays. */}
+        <ul className="hidden items-center gap-7 font-sans text-sm text-muted md:flex">
+          {NAV_LINKS.map((link) => (
+            <li key={link.href}>
+              <a
+                href={link.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToAnchor(link.href);
+                }}
+                className="transition-colors duration-200 ease-[var(--ease-expo)] hover:text-fg"
+              >
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+
+        {/* Muted ghost CTA — no lime; the bold lime lives only on the hero CTA. */}
+        <Button
+          size="md"
+          variant="ghost"
+          className="shrink-0"
+          onClick={() => scrollToAnchor("#cta")}
+        >
           Start rendering
         </Button>
       </nav>
