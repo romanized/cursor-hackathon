@@ -587,10 +587,11 @@ function DemoMain() {
             hook format.
           </span>
         </h3>
-        {/* ONE-LINE supporting copy: smaller text + nowrap (with horizontal
-            scroll-safety) keeps it on a single line so the header takes less
-            vertical height; it wraps only on the narrowest screens. */}
-        <p className="max-w-full whitespace-normal font-[family-name:var(--hk-font-sans)] text-xs leading-snug text-[var(--hk-muted)] sm:whitespace-nowrap sm:text-[13px] lg:text-xs">
+        {/* Supporting copy: wraps cleanly inside the panel column. Only forced to a
+            single line at xl, where the panel is wide enough to hold it without the
+            overflow-hidden frame clipping it mid-word (was sm:nowrap → clipped on
+            tablet / small desktop). */}
+        <p className="max-w-full whitespace-normal font-[family-name:var(--hk-font-sans)] text-xs leading-snug text-[var(--hk-muted)] sm:text-[13px] lg:text-xs xl:whitespace-nowrap">
           The format decides the visual language of the final video. You can change
           it any time before the script is locked.
         </p>

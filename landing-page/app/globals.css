@@ -27,6 +27,12 @@
   --radius-frame: 1.5rem;
   --radius-pill: 9999px;
 
+  /* Vertical rhythm for full sections — fluid so spacing scales with the
+     viewport. Registers `py-section` / `pt-section` / `pb-section`. (Previously
+     these classes were used but no token existed, so they silently produced ZERO
+     padding — sections butted together with no breathing room.) */
+  --spacing-section: clamp(5rem, 10vh, 9rem);
+
   /* Type — Geist (body/display) + Geist Mono (timecodes / HUD / badges). */
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -64,4 +70,27 @@ body {
 .gsap-hidden {
   visibility: hidden;
   opacity: 0;
+}
+
+/*
+  SELF-HEALING REVEAL — the safe alternative to `.gsap-hidden` for scroll reveals.
+
+  An element marked `data-reveal` is FULLY VISIBLE by default (so if JS fails, the
+  ScrollTrigger never fires, or under reduced motion, the content is simply shown —
+  it can NEVER be stranded invisible the way `.gsap-hidden` could). The hidden
+  starting pose is applied ONLY at runtime, and ONLY once JS has set
+  `data-reveal-armed` on the element's section root — so there's no pre-hydration
+  flash, but the floor state is always "visible". The reveal animation then tweens
+  from this pose back to the natural visible state.
+*/
+[data-reveal-armed] [data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion: never arm the hidden pose — content is shown as-is. */
+  [data-reveal-armed] [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
 }

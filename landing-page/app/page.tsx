@@ -1,13 +1,10 @@
 import type { ComponentType } from "react";
 import { SECTIONS } from "@/lib/constants/site";
 import type { SectionId, SectionProps } from "@/types";
-import { Cta } from "@/components/sections/Cta";
-import { Features } from "@/components/sections/Features";
 import { Footer } from "@/components/sections/Footer";
 import { Hero } from "@/components/sections/Hero";
-import { HowItWorks } from "@/components/sections/HowItWorks";
-import { Result } from "@/components/sections/Result";
 import { SneakPeek } from "@/components/sections/SneakPeek";
+import { Why } from "@/components/sections/Why";
 
 /**
  * PURE composition surface — registry-driven.
@@ -24,10 +21,7 @@ import { SneakPeek } from "@/components/sections/SneakPeek";
 const SECTION_ISLANDS = {
   hero: Hero,
   "sneak-peek": SneakPeek,
-  "how-it-works": HowItWorks,
-  result: Result,
-  features: Features,
-  cta: Cta,
+  why: Why,
   footer: Footer,
 } satisfies Record<SectionId, ComponentType<SectionProps>>;
 
