@@ -46,7 +46,7 @@ export async function Sidebar() {
         href="/create"
         className="mb-10 text-xl font-semibold tracking-tight"
       >
-        hookm
+        Hookline
         <span className="text-[var(--color-accent)]">.</span>
       </Link>
 

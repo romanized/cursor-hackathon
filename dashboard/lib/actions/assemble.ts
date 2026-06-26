@@ -109,7 +109,7 @@ export async function assembleFinal(projectId: string) {
   }
 
   const tmpDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), `hookm-${projectId}-`)
+    path.join(os.tmpdir(), `hookline-${projectId}-`)
   );
   console.log("[assemble] tmp", tmpDir, "pairs", pairs.length);
 
@@ -427,7 +427,7 @@ function buildCaptionCues(
 
 function toAss(cues: AssCue[]): string {
   const header = `[Script Info]
-Title: Hookm captions
+Title: Hookline captions
 ScriptType: v4.00+
 WrapStyle: 0
 PlayResX: ${W}

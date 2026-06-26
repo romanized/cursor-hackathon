@@ -1,6 +1,6 @@
-# hookm — dashboard
+# Hookline — dashboard
 
-The Next.js app for hookm, a "reverse engineered" hookm.ai built on Supabase
+The Next.js app for Hookline — viral UGC ads from a product URL. Built on Supabase
 (BaaS + AaaS), Apify (scraping), and ElevenLabs (voiceover). UI uses Tailwind
 v4 + Hugeicons; type-safe DB access through generated `lib/db.ts`.
 

@@ -1,7 +1,7 @@
-# cursor-hackathon — hookm
+# Hookline
 
-A "reverse engineered" hookm.ai. Paste a product URL → out comes a TikTok-ready
-hook video, built with Supabase + Apify + ElevenLabs and a Next.js dashboard.
+Paste a product URL → out comes a TikTok-ready hook video (Hookline — inspired by
+hookm.ai). Built with Supabase + Apify + ElevenLabs and a Next.js dashboard.
 
 ## Getting Started
 
