@@ -3,15 +3,21 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight02Icon, ImageAdd01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight02Icon, ImageAdd01Icon, SparklesIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
-import { recordImageAsset } from "@/lib/actions/images";
+import { generateBeatImages, recordImageAsset } from "@/lib/actions/images";
 import { advanceTo } from "@/lib/actions/projects";
 
 type Beat = { id: string; idx: number; label: string | null; text: string; visual_prompt: string | null };
-type Asset = { beat_id: string | null; url: string | null; storage_path: string | null };
+type Asset = {
+  beat_id: string | null;
+  url: string | null;
+  storage_path: string | null;
+  status: "pending" | "processing" | "ready" | "failed";
+  error: string | null;
+};
 
 export function ImagesEditor({
   projectId,
@@ -29,9 +35,19 @@ export function ImagesEditor({
   const [busyBeat, setBusyBeat] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [advancing, startAdvance] = useTransition();
+  const [generating, startGenerate] = useTransition();
 
+  // Keep only the latest asset row per beat (the server lists them all so we
+  // can show processing/failed states; pick by priority: ready > processing > failed).
   const byBeat = new Map<string, Asset>();
-  for (const a of assets) if (a.beat_id) byBeat.set(a.beat_id, a);
+  for (const a of assets) {
+    if (!a.beat_id) continue;
+    const cur = byBeat.get(a.beat_id);
+    if (!cur || rank(a.status) > rank(cur.status)) byBeat.set(a.beat_id, a);
+  }
+  function rank(s: Asset["status"]) {
+    return s === "ready" ? 3 : s === "processing" ? 2 : s === "failed" ? 1 : 0;
+  }
 
   async function uploadFor(beatId: string, file: File) {
     setError(null);
@@ -54,14 +70,52 @@ export function ImagesEditor({
     }
   }
 
-  const allReady = beats.length > 0 && beats.every((b) => byBeat.has(b.id));
+  function generateAll() {
+    setError(null);
+    startGenerate(async () => {
+      try {
+        const result = await generateBeatImages(projectId);
+        router.refresh();
+        if (result.errors?.length) {
+          setError(`Generated ${result.generated}/${result.generated + result.errors.length}. ${result.errors[0].error}`);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  }
+
+  const readyCount = beats.filter((b) => byBeat.get(b.id)?.status === "ready").length;
+  const allReady = beats.length > 0 && readyCount === beats.length;
+  const pendingCount = beats.length - readyCount;
 
   return (
     <div className="flex flex-col gap-5">
+      <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
+        <div className="flex flex-col gap-1">
+          <span className="overline-muted">Generate with AI</span>
+          <p className="text-sm text-muted">
+            Nano-banana generates one image per beat using the scraped product as a reference. You can still upload your own to override any beat.
+          </p>
+        </div>
+        <Button
+          intent="primary"
+          onClick={generateAll}
+          disabled={generating || !beats.length || allReady}
+        >
+          <HugeiconsIcon icon={SparklesIcon} size={16} strokeWidth={1.6} />
+          {generating
+            ? `Generating ${pendingCount}…`
+            : allReady
+              ? "All beats covered"
+              : `Generate ${pendingCount} image${pendingCount === 1 ? "" : "s"}`}
+        </Button>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {beats.map((b) => {
           const existing = byBeat.get(b.id);
-          const busy = busyBeat === b.id;
+          const busy = busyBeat === b.id || existing?.status === "processing" || (generating && existing?.status !== "ready");
           return (
             <Card key={b.id} className="overflow-hidden">
               <label className="relative block aspect-square cursor-pointer">
@@ -75,16 +129,30 @@ export function ImagesEditor({
                   }}
                   disabled={busy}
                 />
-                {existing?.url ? (
+                {existing?.status === "ready" && existing.url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={existing.url} alt={b.label ?? "beat"} className="size-full object-cover" />
                 ) : (
                   <div className="flex size-full flex-col items-center justify-center gap-2 bg-[var(--color-surface-elev)] text-muted hover:text-text">
-                    <HugeiconsIcon icon={ImageAdd01Icon} size={28} strokeWidth={1.5} />
-                    <span className="text-xs">{busy ? "Uploading…" : "Drop / click"}</span>
+                    {existing?.status === "processing" || busy ? (
+                      <>
+                        <HugeiconsIcon icon={SparklesIcon} size={28} strokeWidth={1.5} className="animate-pulse text-[var(--color-accent)]" />
+                        <span className="text-xs">Generating…</span>
+                      </>
+                    ) : existing?.status === "failed" ? (
+                      <>
+                        <span className="overline">Failed</span>
+                        <span className="px-3 text-[10px] text-faint text-center line-clamp-3">{existing.error}</span>
+                      </>
+                    ) : (
+                      <>
+                        <HugeiconsIcon icon={ImageAdd01Icon} size={28} strokeWidth={1.5} />
+                        <span className="text-xs">Drop / click</span>
+                      </>
+                    )}
                   </div>
                 )}
-                {existing && (
+                {existing?.status === "ready" && (
                   <span className="absolute right-3 top-3 grid size-7 place-items-center rounded-full bg-[var(--color-accent)] text-white">
                     <HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} />
                   </span>

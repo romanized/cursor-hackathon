@@ -34,8 +34,15 @@ supports email OTP and Google (Google needs the Supabase provider enabled).
 - `lib/actions/*` — server actions, one per resource (projects, products,
   images, voice, clips, assemble). All read `auth.getUser()` first and bail to
   `/login` if missing.
-- `lib/providers/{apify,elevenlabs}.ts` — thin SDK wrappers. Swap the actor /
-  voice / model in one place.
+- `lib/providers/{apify,elevenlabs,google}.ts` — thin SDK wrappers. Swap the
+  actor / voice / image model in one place. The Google wrapper drives:
+  - **Step 3** — `generateScript()`: `gemini-2.5-flash` with `responseSchema`
+    to return `{ voiceover_script, beats[] }` from the saved brief.
+  - **Step 4** — `generateBeatImage()`: `gemini-2.5-flash-image` (Nano-banana),
+    optionally seeded with the scraped product image as a reference.
+  - **Step 6** — `generateVideoFromImage()`: Veo 3 Fast image-to-video, 9:16,
+    4-second clips per beat. Long-running operation polled until done.
+  Per-template style hints live in `STYLE` inside `google.ts`.
 - `lib/credits.ts` — wraps the atomic `charge_credits` Postgres function from
   `supabase/migrations/20260626110000_credits_fn.sql`. Step 3 is the only
   charging point right now (1 credit for hook, 3 for full).
@@ -46,15 +53,15 @@ supports email OTP and Google (Google needs the Supabase provider enabled).
 |---|------------|-------------------------------------------------------------------------------|
 | 1 | template   | Pick a format (skeleton, cartoon, …). Persists `template_id` + `media_type`. |
 | 2 | product    | Paste URL → Apify scrape. Edit brief copy by hand and pick runtime/captions. |
-| 3 | script     | Voiceover script + beats list. Saving **charges credits** atomically.        |
-| 4 | images     | Upload one image per beat (direct-to-Storage via session client).            |
+| 3 | script     | "Draft script" calls Gemini 2.5 Flash to produce voiceover + beats from the brief. Edit by hand. Saving **charges credits** atomically. |
+| 4 | images     | "Generate with AI" calls Gemini 2.5 Flash Image (Nano-banana) per beat, using the scraped product as a visual reference. Manual upload still works to override any beat. |
 | 5 | voice      | ElevenLabs renders voiceover MP3 to Storage, signed URL goes on the asset.   |
-| 6 | clips      | ponytail: copies images into `kind='clip'` rows (no motion yet).             |
+| 6 | clips      | "Generate motion clips with Veo" turns each beat image into a real 4-second 9:16 MP4 via Veo 3 Fast. "Skip — use still images" falls back to image-as-clip rows if Veo is over budget or fails. |
 | 7 | assemble   | ponytail: bundles clips + voice into a single `kind='final'` asset.          |
-| 8 | film       | Slideshow player advances the clip strip over the voiceover audio.           |
+| 8 | film       | Player advances the clip strip over the voiceover audio; auto-detects video vs still clips and renders `<video>` / `<img>` accordingly. |
 
-Steps 6/7/8 are intentionally minimal — when we wire a real renderer (Remotion
-or a video model), only those three server actions change.
+Step 7 stays minimal — when we move to a real renderer (Remotion or
+ffmpeg) only that server action changes. Step 6 is wired to live Veo.
 
 ## Drafts
 

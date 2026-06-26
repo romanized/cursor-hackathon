@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Accent } from "@/components/accent";
 import { ClipsPanel } from "./clips-panel";
 
+// Veo image-to-video is long-running (~60s per beat). Allow up to 10 minutes
+// for the full set of beats so the server action doesn't time out on Vercel.
+// ponytail: when we move clip rendering to a background queue this can drop.
+export const maxDuration = 600;
+
 export default async function ClipsStep({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
@@ -14,10 +19,10 @@ export default async function ClipsStep({ params }: { params: Promise<{ id: stri
       .eq("status", "ready"),
     supabase
       .from("assets")
-      .select("id, beat_id, url")
+      .select("id, beat_id, url, status, error")
       .eq("project_id", id)
       .eq("kind", "clip")
-      .eq("status", "ready"),
+      .order("created_at"),
   ]);
 
   return (
@@ -28,14 +33,14 @@ export default async function ClipsStep({ params }: { params: Promise<{ id: stri
           Animate the <Accent>beats.</Accent>
         </h1>
         <p className="text-muted max-w-xl">
-          Hackathon build: each image is held as a still clip. Swap this step for Remotion or a video model when you&apos;re ready.
+          Each beat&apos;s image becomes a real 4-second motion clip via Veo 3 Fast. Falls back to still images if Veo is over budget or fails.
         </p>
       </header>
 
       <ClipsPanel
         projectId={id}
         imageCount={images?.length ?? 0}
-        clips={(clips ?? []).map((c) => ({ id: c.id, url: c.url }))}
+        clips={clips ?? []}
       />
     </div>
   );

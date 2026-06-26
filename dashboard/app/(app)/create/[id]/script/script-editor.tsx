@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon, ArrowRight02Icon, Delete02Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArrowRight02Icon, Delete02Icon, SparklesIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { CreditPill } from "@/components/ui/credit-pill";
-import { saveScript } from "@/lib/actions/projects";
+import { generateScriptForProject, saveScript } from "@/lib/actions/projects";
 
 type Beat = { idx: number; label: string | null; text: string; visual_prompt: string | null };
 
@@ -38,8 +39,22 @@ export function ScriptEditor({
           { label: "CTA", text: "", visual_prompt: "" },
         ],
   );
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [aiPending, startAi] = useTransition();
+
+  function runGenerate() {
+    setError(null);
+    startAi(async () => {
+      try {
+        await generateScriptForProject(projectId);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  }
 
   function update(i: number, patch: Partial<(typeof beats)[number]>) {
     setBeats((cur) => cur.map((b, j) => (i === j ? { ...b, ...patch } : b)));
@@ -79,6 +94,19 @@ export function ScriptEditor({
   return (
     <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="flex flex-col gap-5">
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div className="flex flex-col gap-1">
+            <span className="overline-muted">Write with AI</span>
+            <p className="text-sm text-muted">
+              Gemini drafts a {project.runtime === "hook" ? "6-beat hook" : "10-beat full ad"} from your brief. Overwrites whatever&apos;s here.
+            </p>
+          </div>
+          <Button type="button" intent="primary" onClick={runGenerate} disabled={aiPending}>
+            <HugeiconsIcon icon={SparklesIcon} size={16} strokeWidth={1.6} />
+            {aiPending ? "Drafting…" : initialBeats.length ? "Re-draft script" : "Draft script"}
+          </Button>
+        </Card>
+
         <Card className="p-5">
           <div className="mb-3 flex items-center justify-between">
             <span className="overline-muted">Voiceover script</span>

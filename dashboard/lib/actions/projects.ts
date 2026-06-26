@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { chargeCredits, COST } from "@/lib/credits";
+import { generateScript as runGenerateScript } from "@/lib/providers/google";
 import type { TablesInsert, TablesUpdate } from "@/lib/db";
 
 async function requireUser() {
@@ -116,6 +117,75 @@ export async function saveScript(
 
   revalidatePath(`/create/${projectId}`, "layout");
   redirect(`/create/${projectId}/images`);
+}
+
+/**
+ * Generate the voiceover script + beats from the saved brief using Gemini 2.5
+ * Flash. Writes straight to the draft (does NOT charge credits — charging
+ * still happens on Save & continue from Step 3).
+ */
+export async function generateScriptForProject(projectId: string) {
+  const { supabase } = await requireUser();
+
+  const { data: project, error: pErr } = await supabase
+    .from("projects")
+    .select(
+      "template_id, runtime, product_name, target_audience, customer_issues, benefits, product_id",
+    )
+    .eq("id", projectId)
+    .single();
+  if (pErr || !project) throw pErr ?? new Error("project not found");
+
+  let productDescription: string | null = null;
+  if (project.product_id) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("description")
+      .eq("id", project.product_id)
+      .maybeSingle();
+    productDescription = product?.description ?? null;
+  }
+
+  console.log("[generateScriptForProject] start", {
+    projectId,
+    template: project.template_id,
+    runtime: project.runtime,
+  });
+
+  const result = await runGenerateScript({
+    templateId: project.template_id,
+    productName: project.product_name,
+    targetAudience: project.target_audience,
+    customerIssues: project.customer_issues ?? [],
+    benefits: project.benefits ?? [],
+    runtime: project.runtime,
+    productDescription,
+  });
+
+  // Replace beats wholesale.
+  const { error: delErr } = await supabase.from("beats").delete().eq("project_id", projectId);
+  if (delErr) throw delErr;
+
+  if (result.beats.length) {
+    const rows: TablesInsert<"beats">[] = result.beats.map((b, idx) => ({
+      project_id: projectId,
+      idx,
+      label: b.label || null,
+      text: b.text,
+      visual_prompt: b.visual_prompt || null,
+    }));
+    const { error: insErr } = await supabase.from("beats").insert(rows);
+    if (insErr) throw insErr;
+  }
+
+  const { error: upErr } = await supabase
+    .from("projects")
+    .update({ voiceover_script: result.voiceover_script || null })
+    .eq("id", projectId);
+  if (upErr) throw upErr;
+
+  revalidatePath(`/create/${projectId}`, "layout");
+  return { beats: result.beats.length, scriptChars: result.voiceover_script.length };
 }
 
 export async function advanceTo(projectId: string, nextStep: number, nextSlug: string) {

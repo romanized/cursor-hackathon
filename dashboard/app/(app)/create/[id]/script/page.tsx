@@ -30,7 +30,11 @@ export default async function ScriptStep({ params }: { params: Promise<{ id: str
         </p>
       </header>
 
+      {/* Re-mount the editor whenever the AI script generator (or any external
+          write) lands new data. Sacrifices in-progress manual edits when AI
+          re-drafts — explicit intent. */}
       <ScriptEditor
+        key={`${beats?.length ?? 0}:${(project?.voiceover_script ?? "").length}`}
         projectId={id}
         project={project!}
         initialBeats={beats ?? []}

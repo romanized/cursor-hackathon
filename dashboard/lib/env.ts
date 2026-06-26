@@ -10,6 +10,11 @@ const schema = z.object({
   APIFY_TOKEN: z.string().min(1).optional(),
   ELEVENLABS_API_KEY: z.string().min(1).optional(),
   ELEVENLABS_VOICE_ID: z.string().min(1).default("JBFqnCBsd6RMkjVDRZzb"),
+  GOOGLE_API_KEY: z.string().min(1).optional(),
+  // Veo model + clip length. Defaults to the cheapest current image-to-video
+  // model. Override to "veo-3.0-generate-001" for higher quality at ~2x cost.
+  VEO_MODEL: z.string().min(1).default("veo-3.0-fast-generate-001"),
+  VEO_DURATION_SECONDS: z.coerce.number().int().min(4).max(8).default(4),
 });
 
 const parsed = schema.safeParse({
@@ -20,19 +25,24 @@ const parsed = schema.safeParse({
   APIFY_TOKEN: process.env.APIFY_TOKEN,
   ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
   ELEVENLABS_VOICE_ID: process.env.ELEVENLABS_VOICE_ID,
+  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+  VEO_MODEL: process.env.VEO_MODEL,
+  VEO_DURATION_SECONDS: process.env.VEO_DURATION_SECONDS,
 });
 
 if (!parsed.success) {
   throw new Error(
     `[env] missing/invalid environment: ${parsed.error.issues
       .map((i) => `${i.path.join(".")}: ${i.message}`)
-      .join(", ")}`,
+      .join(", ")}`
   );
 }
 
 export const env = parsed.data;
 
-export function requireServer<K extends keyof typeof env>(key: K): NonNullable<(typeof env)[K]> {
+export function requireServer<K extends keyof typeof env>(
+  key: K
+): NonNullable<(typeof env)[K]> {
   const v = env[key];
   if (v === undefined || v === null || v === "") {
     throw new Error(`[env] ${String(key)} is required for this server action`);

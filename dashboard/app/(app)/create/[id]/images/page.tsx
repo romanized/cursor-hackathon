@@ -9,10 +9,9 @@ export default async function ImagesStep({ params }: { params: Promise<{ id: str
     supabase.from("beats").select("id, idx, label, text, visual_prompt").eq("project_id", id).order("idx"),
     supabase
       .from("assets")
-      .select("beat_id, url, storage_path")
+      .select("beat_id, url, storage_path, status, error")
       .eq("project_id", id)
-      .eq("kind", "image")
-      .eq("status", "ready"),
+      .eq("kind", "image"),
     supabase.auth.getUser(),
   ]);
 

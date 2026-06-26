@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createService } from "@/lib/supabase/service";
+import { generateVideoFromImage } from "@/lib/providers/google";
 import type { TablesInsert } from "@/lib/db";
 
 async function requireUser() {
@@ -13,9 +15,148 @@ async function requireUser() {
 }
 
 /**
- * ponytail: placeholder Step 6 — promotes every image asset to a "still" clip.
- * Ceiling: no motion, no transitions. Upgrade path: Remotion render or a
- * video model. Until then this lets the assembly + film steps function.
+ * Step 6 — turn each beat's image into a real motion clip using Veo
+ * (image-to-video). Sequential per beat so the user sees progress; each clip
+ * is a separate `assets(kind='clip')` row that's processing then ready/failed.
+ * Re-running only retries beats without a ready clip.
+ */
+export async function generateMotionClips(projectId: string) {
+  const { supabase, user } = await requireUser();
+  const svc = createService();
+
+  // Drop any leftover non-ready clip rows (failed/processing) before kicking
+  // off a fresh pass, so the UI only shows current attempts.
+  await supabase
+    .from("assets")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("kind", "clip")
+    .neq("status", "ready");
+
+  const [{ data: images }, { data: existing }] = await Promise.all([
+    supabase
+      .from("assets")
+      .select("id, beat_id, url, storage_path")
+      .eq("project_id", projectId)
+      .eq("kind", "image")
+      .eq("status", "ready"),
+    supabase
+      .from("assets")
+      .select("beat_id, status")
+      .eq("project_id", projectId)
+      .eq("kind", "clip"),
+  ]);
+
+  if (!images?.length) throw new Error("no images ready — generate or upload images first");
+
+  const beatIds = new Set(images.map((i) => i.beat_id));
+  const { data: beats } = await supabase
+    .from("beats")
+    .select("id, idx, label, text, visual_prompt")
+    .eq("project_id", projectId)
+    .in("id", [...beatIds].filter((id): id is string => Boolean(id)))
+    .order("idx");
+
+  const readyClipBeats = new Set(
+    (existing ?? []).filter((a) => a.status === "ready").map((a) => a.beat_id),
+  );
+  const todo = images.filter((img) => img.beat_id && !readyClipBeats.has(img.beat_id));
+
+  console.log("[generateMotionClips] start", {
+    projectId,
+    todo: todo.length,
+    total: images.length,
+  });
+
+  let generated = 0;
+  const errors: Array<{ beat: string; error: string }> = [];
+
+  for (const img of todo) {
+    if (!img.beat_id || !img.storage_path) continue;
+    const beat = beats?.find((b) => b.id === img.beat_id);
+
+    // Mark processing so the UI shows a spinner per beat.
+    const { data: assetRow, error: insErr } = await supabase
+      .from("assets")
+      .insert({
+        project_id: projectId,
+        beat_id: img.beat_id,
+        kind: "clip",
+        status: "processing",
+        provider: "google:veo-3-fast",
+        meta: { source_image: img.id } as never,
+      } satisfies TablesInsert<"assets">)
+      .select("id")
+      .single();
+    if (insErr || !assetRow) {
+      errors.push({ beat: img.beat_id, error: insErr?.message ?? "insert failed" });
+      continue;
+    }
+
+    try {
+      // Download the source image from Storage (signed URL would expire).
+      const { data: imgBlob, error: dlErr } = await svc.storage.from("media").download(img.storage_path);
+      if (dlErr || !imgBlob) throw dlErr ?? new Error("could not download source image");
+      const imageBytes = Buffer.from(await imgBlob.arrayBuffer());
+
+      const motionPrompt = [
+        beat?.visual_prompt || beat?.text || "Subtle product motion",
+        // Nudge toward gentle, ad-friendly motion.
+        "Smooth camera push-in, subtle product rotation, soft parallax. Cinematic, no abrupt cuts.",
+      ].join(" ");
+
+      const { bytes, mimeType } = await generateVideoFromImage({
+        imageBytes,
+        imageMimeType: imgBlob.type || "image/png",
+        prompt: motionPrompt,
+      });
+
+      const path = `${user.id}/${projectId}/clips/${img.beat_id}.mp4`;
+      const { error: upErr } = await svc.storage.from("media").upload(path, bytes, {
+        contentType: mimeType,
+        upsert: true,
+      });
+      if (upErr) throw upErr;
+      const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
+
+      await supabase
+        .from("assets")
+        .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
+        .eq("id", assetRow.id);
+      generated += 1;
+      console.log("[generateMotionClips] ok", { beat: img.beat_id, path });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await supabase
+        .from("assets")
+        .update({ status: "failed", error: msg })
+        .eq("id", assetRow.id);
+      errors.push({ beat: img.beat_id, error: msg });
+      console.error("[generateMotionClips] failed", { beat: img.beat_id, error: msg });
+    }
+
+    revalidatePath(`/create/${projectId}/clips`);
+  }
+
+  // Advance furthest reachable step if at least one clip is ready overall.
+  const { data: anyReady } = await supabase
+    .from("assets")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("kind", "clip")
+    .eq("status", "ready")
+    .limit(1);
+  if (anyReady?.length) {
+    await supabase.from("projects").update({ current_step: 7 }).eq("id", projectId).lt("current_step", 7);
+  }
+
+  revalidatePath(`/create/${projectId}`, "layout");
+  return { generated, errors };
+}
+
+/**
+ * ponytail: fallback for when Veo is not configured / over budget. Promotes
+ * every image asset to a "still" clip so Assemble + Film steps still work.
  */
 export async function generateStillClips(projectId: string) {
   const { supabase } = await requireUser();

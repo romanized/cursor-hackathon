@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { scrapeUrl } from "@/lib/providers/apify";
-import type { TablesInsert } from "@/lib/db";
+import { inferBrief } from "@/lib/providers/google";
+import type { TablesInsert, TablesUpdate } from "@/lib/db";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -64,13 +65,38 @@ export async function scrapeAndAttach(projectId: string, url: string) {
       .eq("id", product.id);
     if (updErr) console.error("[products.scrapeAndAttach] product update failed", updErr);
 
-    // Seed product_name on the project if empty so the Brief Editor starts populated.
-    const { error: seedErr } = await supabase
+    // Seed brief fields on the project — only those still empty, so we never
+    // stomp on user edits. Brief inference is best-effort: a Gemini failure
+    // should not fail the whole scrape.
+    let inferred: Awaited<ReturnType<typeof inferBrief>> | null = null;
+    try {
+      inferred = await inferBrief({ productName: result.name, description: result.description });
+      console.log("[products.scrapeAndAttach] inferred brief", {
+        audienceChars: inferred.target_audience.length,
+        issues: inferred.customer_issues.length,
+        benefits: inferred.benefits.length,
+      });
+    } catch (e) {
+      console.warn("[products.scrapeAndAttach] brief inference failed", e);
+    }
+
+    const { data: current } = await supabase
       .from("projects")
-      .update({ product_name: result.name ?? null })
+      .select("product_name, target_audience, customer_issues, benefits")
       .eq("id", projectId)
-      .is("product_name", null);
-    if (seedErr) console.error("[products.scrapeAndAttach] project seed failed", seedErr);
+      .single();
+
+    const seed: TablesUpdate<"projects"> = {};
+    if (!current?.product_name && result.name) seed.product_name = result.name;
+    if (inferred) {
+      if (!current?.target_audience && inferred.target_audience) seed.target_audience = inferred.target_audience;
+      if (!current?.customer_issues?.length && inferred.customer_issues.length) seed.customer_issues = inferred.customer_issues;
+      if (!current?.benefits?.length && inferred.benefits.length) seed.benefits = inferred.benefits;
+    }
+    if (Object.keys(seed).length) {
+      const { error: seedErr } = await supabase.from("projects").update(seed).eq("id", projectId);
+      if (seedErr) console.error("[products.scrapeAndAttach] project seed failed", seedErr);
+    }
   } catch (e) {
     console.error("[products.scrapeAndAttach] failed", e);
     await supabase

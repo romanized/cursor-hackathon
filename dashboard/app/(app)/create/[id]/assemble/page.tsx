@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { Accent } from "@/components/accent";
 import { AssemblePanel } from "./assemble-panel";
 
+// FFmpeg render can take 5-20s for ~24s of footage. Bump the action ceiling
+// so Vercel doesn't kill it mid-encode.
+export const maxDuration = 300;
+
 export default async function AssembleStep({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
@@ -25,7 +29,7 @@ export default async function AssembleStep({ params }: { params: Promise<{ id: s
           Stitch it <Accent>together.</Accent>
         </h1>
         <p className="text-muted max-w-xl">
-          Combines the clip list with the voiceover into the final cut. Swap this for a real renderer (FFmpeg/Remotion) without changing the rest of the flow.
+          FFmpeg stitches every beat clip and bakes the voiceover audio straight into a single 9:16 MP4. Takes 5–20 seconds.
         </p>
       </header>
 
