@@ -138,13 +138,16 @@ export async function generateBeatImage(input: BeatImageInput): Promise<{ bytes:
 
   const hasMascot = Boolean(asSupportedRef(input.mascotImage));
 
-  // Microscopic = mechanism CGI. Drop the product ref (the scene is abstract)
-  // but KEEP the mascot — every image must feature the character. It appears as
-  // a small cameo so the macro mechanism stays the hero.
+  // Microscopic = macro mechanism reveal. Drop the product ref (the scene is a
+  // close-up) but KEEP the mascot as a small cameo so every image features the
+  // character. Render in the SAME template style as the character beats so the
+  // macro shots don't read as a separate (uncanny) sci-fi/medical look.
   if (input.beatType === "microscopic") {
+    const micStyle =
+      (input.templateId && RENDER_STYLE[input.templateId]) || RENDER_STYLE.cgi_3d;
     const micInput: BeatImageInput = { ...input, referenceImage: null };
     try {
-      return await runGenerate(micInput, "", beatPrompt, "cameo");
+      return await runGenerate(micInput, micStyle, beatPrompt, "cameo");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (!/PROHIBITED_CONTENT|SAFETY|BLOCKED/.test(msg)) throw e;
@@ -408,9 +411,9 @@ export async function generateScript(input: ScriptInput): Promise<GeneratedScrip
     (input.templateId && CHARACTER[input.templateId]) || CHARACTER.skeleton_ai;
 
   const prompt = [
-    `You are a senior short-form ad scriptwriter. You write scroll-stopping UGC "hook" videos that mix TWO visual languages:`,
+    `You are a senior short-form ad scriptwriter. You write scroll-stopping UGC "hook" videos that mix TWO shot types — but ONE consistent look:`,
     `1. a recurring acted CHARACTER (the hero) who suffers the problem and is saved, and`,
-    `2. 3D-CGI "microscopic" beats that visualize WHY the product works at molecular/macro scale.`,
+    `2. "microscopic" macro reveal beats that show WHY the product works at extreme close-up scale, rendered in the SAME visual style, palette and lighting as the character beats so the whole video feels like one piece.`,
     ``,
     `THE CHARACTER (lock for the WHOLE video — same hero in every character beat):`,
     `- Name: ${character.name}`,
@@ -426,12 +429,12 @@ export async function generateScript(input: ScriptInput): Promise<GeneratedScrip
     ``,
     `CORE PRINCIPLE — dramatize the pain, then prove the mechanism.`,
     `- Problem = felt, visible drama. The character physically lives the WORST-CASE version of the pain. Visceral, not "a bit uncomfortable".`,
-    `- Solution = a credible mechanism made beautiful: show the inner mechanism as a glowing CGI visualization (the microscopic beats). Proof, not a claim.`,
+    `- Solution = a credible mechanism made beautiful: reveal the inner mechanism as an extreme macro close-up (the microscopic beats), in the SAME rendered world as the rest of the ad. Proof, not a claim.`,
     `- MATCH THE REGISTER: if the pain is already physical/visceral (drowning, suffocating, burning, crushing) play it STRAIGHT, intense, realistic. If the pain is mundane (ugly glasses, hot room, slow wifi) ESCALATE to absurdist physical peril so it still reads as life-or-death. Tame = invisible = no views; absurd-when-it-should-be-real breaks the spell. Calibrate.`,
     ``,
     `THE TWO BEAT TYPES (every beat is exactly one):`,
     `- "character": the supplied character physically performs the pain (problem beats) or the relief (payoff), in a real-world setting that matches the product.`,
-    `- "microscopic": a 3D-rendered CGI look INSIDE the product at extreme macro scale, showing the ONE mechanism that makes it work. NO character appears. Calm, fascinating, scientific.`,
+    `- "microscopic": an extreme macro close-up INSIDE or at the surface of the product, showing the ONE mechanism that makes it work. Same render style, palette and lighting as the character beats — NOT a separate sci-fi/medical look. Calm and fascinating, the macro is the hero.`,
     ``,
     `BEAT ARC (arrange in this order). Open and close on a "character" beat; place "microscopic" at the mechanism turn:`,
     `1. Hook + escalation (first 2-3 beats, "character", role hook then escalation): drop mid-pain, no build-up; each beat stacks a DIFFERENT, WORSE pain from the brief.`,
@@ -450,7 +453,7 @@ export async function generateScript(input: ScriptInput): Promise<GeneratedScrip
     ``,
     `VISUAL-PROMPT RULES (always 9:16):`,
     `- character beats: "9:16 image of the character [action dramatizing this beat], [emotional detail], [body language]. [Real-world environment]. [Camera angle], [lighting]." Action/scene only — do NOT describe the character's anatomy.`,
-    `- microscopic beats MUST carry ALL these locked style tokens: "A 3D rendered CGI visualization of [the mechanism] at extreme macro scale, [what it's doing]. Dark moody environment — deep black, dark teal. Bioluminescent glow: soft greens, teals, neon edges. [structure] provides scale. Volumetric fog, dramatic rim/backlit lighting. Clean CGI medical visualization style. 9:16 vertical composition."`,
+    `- microscopic beats: describe ONLY the macro subject + action — "Extreme macro close-up of [the mechanism] [doing X] inside / at the surface of the product. [Tiny real-world element] for scale. Slow push-in, shallow depth of field, 9:16 vertical." Do NOT specify colours, palette, mood, or any render look — the global template style is applied automatically so these beats MATCH the character beats. NEVER use a 'medical', 'sci-fi', 'bioluminescent', 'dark moody' or 'neon glow' look.`,
     ``,
     `OUTPUT`,
     `- ${beatRange} beats. Each beat: type, role, vo_line, duration_seconds (4-6s each, summing to ≈ ${runtimeSeconds}), visual_prompt.`,
