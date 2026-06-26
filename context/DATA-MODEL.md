@@ -11,6 +11,27 @@ Migrations live in [`supabase/migrations/`](../supabase/migrations/):
 | `20260626103000_core_schema.sql` | Extensions, enums, tables, indexes, triggers |
 | `20260626103001_rls_storage.sql` | RLS policies + `media` storage bucket |
 | `20260626103002_seed_templates.sql` | Seed the 5 viral formats (idempotent) |
+| `20260626103003_advisor_fixes.sql` | Drop orphaned `set_updated_at`, lock down `handle_new_user` |
+| `20260626110000_credits_fn.sql` | `public.charge_credits(user, delta, reason, project)` — atomic charge + ledger insert |
+
+## Credits
+
+Costs (from `dashboard/lib/credits.ts → COST`):
+
+| Runtime | Credits |
+|---|---|
+| Hook (one beat run) | 1 |
+| Full ad             | 3 |
+
+Charging is a single SQL function — `charge_credits(p_user, p_delta, p_reason, p_project)`
+— so the balance update + ledger insert happen in one transaction. Negative
+`p_delta` debits; positive refunds. Raises `insufficient_credits` (SQLSTATE
+`P0001`) when the balance would go below zero, which `chargeCredits` surfaces
+as a JS error `"insufficient_credits"`.
+
+Only the `service_role` may call it (revoked from `anon` + `authenticated`);
+server actions go through `dashboard/lib/credits.ts → chargeCredits`. The only
+charging point today is **Step 3 → Save script**.
 
 ## ER overview
 

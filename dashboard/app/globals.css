@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: #0a0606;
+  --color-surface: #15100f;
+  --color-surface-elev: #1c1716;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+  --color-text: #ededed;
+  --color-muted: #8a8584;
+  --color-faint: #5a5554;
+  --color-accent: #ef4444;
+  --color-accent-soft: #f87171;
+  --color-accent-dim: #7a1d1d;
+
+  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
+
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+
+  --shadow-glow: 0 24px 80px -20px rgba(239, 68, 68, 0.45);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 30px 60px -30px rgba(0, 0, 0, 0.5);
+}
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: white;
+}
+
+/* Display italic accent used inline on headings. */
+.accent {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--color-accent);
+}
+
+/* Uppercase labels like STEP 01, MOST USED, BRIEF EDITOR. */
+.overline {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+.overline-muted {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+/* Atmospheric ambient red wash behind the auth + step 1. */
+.ambient-red {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 50% 110%, rgba(239, 68, 68, 0.18), transparent 70%),
+    radial-gradient(40% 30% at 80% 0%, rgba(248, 113, 113, 0.06), transparent 70%);
+  z-index: -1;
+}
+
+/* SVG noise grain — pinned to viewport, mix-blend on top of everything. */
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* Page-load stagger — `style="--i:1"` on the element. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise {
+  opacity: 0;
+  animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+/* Soft pulse on the active step dot. */
+@keyframes coral-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+.pulse-coral { animation: coral-pulse 2.4s ease-in-out infinite; }
+
+/* Inputs */
+input, textarea, select {
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+}
+input::placeholder, textarea::placeholder { color: var(--color-faint); }
+
+/* Hide scrollbars where we use horizontal step strip. */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
