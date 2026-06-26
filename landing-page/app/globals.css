@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/*
+  STUDIO BLACK — design tokens (Tailwind v4 @theme). These register the utility
+  classes the whole site uses (bg-bg, bg-surface, text-fg, text-muted,
+  border-hairline, rounded-frame, font-sans/mono, ease-expo, …). Single source of
+  truth; do NOT re-register elsewhere.
+*/
+@theme {
+  /* Canvas + elevated surfaces (near-black, subtly stepped). */
+  --color-bg: #050505;
+  --color-surface: #0e0e10;
+  --color-surface-2: #16161a;
+
+  /* Foreground + muted text. */
+  --color-fg: #ededed;
+  --color-muted: #8a8a92;
+
+  /* Hairlines — white-alpha only (subtle + strong). */
+  --color-hairline: rgba(255, 255, 255, 0.08);
+  --color-hairline-strong: rgba(255, 255, 255, 0.14);
+
+  /* Locked accents: lime is the ONLY CTA/progress accent; cobalt is Pipeline-only. */
+  --color-accent: #c6f24e;
+  --color-accent-cobalt: #1f6cf0;
+
+  /* Radii. */
+  --radius-frame: 1.5rem;
+  --radius-pill: 9999px;
+
+  /* Type — Geist (body/display) + Geist Mono (timecodes / HUD / badges). */
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Signature ease (also exported as EASE_EXPO for GSAP). */
+  --ease-expo: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Studio Black base: dark canvas, crisp text. */
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+  Rendered-texture grain — a static dotted radial used inside framed media tiles so
+  they read as a "render", not flat fills. White-alpha only (never an accent hue).
+*/
+.render-grain {
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.025) 1px,
+    transparent 1px
+  );
+  background-size: 3px 3px;
+}
+
+/*
+  Pre-reveal hidden state for GSAP entries: items tagged with this are invisible
+  until their mount/scroll timeline fades them in, so nothing flashes pre-hydration.
+*/
+.gsap-hidden {
+  visibility: hidden;
+  opacity: 0;
+}

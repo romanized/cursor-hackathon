@@ -1,0 +1,41 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# NOTE: public/videos/*.mp4 are intentionally COMMITTED — they are the demo
+# source clips and were lost once already because they lived outside git.
