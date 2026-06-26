@@ -1,6 +1,7 @@
 import "server-only";
 import { fal } from "@fal-ai/client";
 import { env, requireServer } from "@/lib/env";
+import type { VeedSubtitlePreset } from "@/lib/media/subtitle-presets";
 
 /**
  * fal.ai provider — the cheap-but-good replacement for the Google/Replicate
@@ -109,5 +110,45 @@ export async function generateVideoFromImageFal(input: {
 
   const bytes = await downloadToBytes(url, "fal video");
   console.log("[fal.veo-lite] done", { bytes: bytes.length });
+  return { bytes, mimeType: "video/mp4" };
+}
+
+// --- Subtitles (Step 7) -----------------------------------------------------
+// VEED Subtitles on fal — burns styled captions into the assembled MP4.
+// Pass srt_content to skip re-transcription (we already have ElevenLabs timing).
+export async function addSubtitlesVeed(input: {
+  videoBytes: Buffer;
+  srtContent: string;
+  preset: VeedSubtitlePreset;
+  language?: string;
+}): Promise<{ bytes: Buffer; mimeType: string }> {
+  ensure();
+  const language = input.language ?? "en-US";
+  console.log("[fal.veed-subtitles] upload", {
+    preset: input.preset,
+    bytes: input.videoBytes.length,
+    srtChars: input.srtContent.length,
+  });
+
+  const videoUrl = await fal.storage.upload(
+    new Blob([new Uint8Array(input.videoBytes)], { type: "video/mp4" }),
+  );
+
+  const result = await withRetry(() =>
+    fal.subscribe("veed/subtitles", {
+      input: {
+        video_url: videoUrl,
+        preset: input.preset,
+        srt_content: input.srtContent,
+        language,
+      },
+    }),
+  );
+  const data = result.data as { video?: { url: string } };
+  const url = data.video?.url;
+  if (!url) throw new Error("fal veed/subtitles returned no video URL");
+
+  const bytes = await downloadToBytes(url, "fal veed subtitles");
+  console.log("[fal.veed-subtitles] done", { bytes: bytes.length });
   return { bytes, mimeType: "video/mp4" };
 }

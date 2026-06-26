@@ -34,6 +34,8 @@ const schema = z.object({
   FAL_VIDEO_MODEL: z.string().min(1).default("fal-ai/veo3.1/lite/image-to-video"),
   FAL_DURATION_SECONDS: z.coerce.number().int().min(4).max(8).default(4),
   FAL_RESOLUTION: z.enum(["720p", "1080p"]).default("720p"),
+  // Fallback VEED subtitle preset when project.meta.caption_preset is absent.
+  FAL_SUBTITLE_PRESET: z.string().min(1).default("simple"),
   // Community model on Replicate, so we must pin a `version` hash —
   // the `/v1/models/owner/name/predictions` endpoint only works for official
   // models. Format: `owner/name:version`.
@@ -64,6 +66,7 @@ const parsed = schema.safeParse({
   FAL_VIDEO_MODEL: process.env.FAL_VIDEO_MODEL,
   FAL_DURATION_SECONDS: process.env.FAL_DURATION_SECONDS,
   FAL_RESOLUTION: process.env.FAL_RESOLUTION,
+  FAL_SUBTITLE_PRESET: process.env.FAL_SUBTITLE_PRESET,
 });
 
 if (!parsed.success) {

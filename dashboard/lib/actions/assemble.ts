@@ -12,7 +12,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { TablesInsert } from "@/lib/db";
+import { env } from "@/lib/env";
+import { parseSubtitlePreset } from "@/lib/media/subtitle-presets";
 import type { VoiceAlignment } from "@/lib/providers/elevenlabs";
+import { addSubtitlesVeed } from "@/lib/providers/fal";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
 
@@ -52,7 +55,7 @@ export async function assembleFinal(projectId: string) {
   const [{ data: project }, { data: clips }, { data: voices }] = await Promise.all([
     supabase
       .from("projects")
-      .select("captions")
+      .select("captions, meta")
       .eq("id", projectId)
       .single(),
     supabase
@@ -143,9 +146,12 @@ export async function assembleFinal(projectId: string) {
       }),
     );
 
-    // Captions: ASS with 2–3 word chunks + karaoke highlight, lower-third.
-    let assName: string | null = null;
+    // Captions: SRT from ElevenLabs alignment → VEED on Fal (when enabled).
+    let srtContent: string | null = null;
+    let captionPreset = parseSubtitlePreset(env.FAL_SUBTITLE_PRESET);
     if (project?.captions) {
+      const meta = (project.meta ?? {}) as Record<string, unknown>;
+      captionPreset = parseSubtitlePreset(meta.caption_preset ?? env.FAL_SUBTITLE_PRESET);
       const cues = buildCaptionCues(
         pairs.map((p, i) => ({
           text: p.text,
@@ -154,16 +160,26 @@ export async function assembleFinal(projectId: string) {
         })),
       );
       if (cues.length) {
-        assName = "captions.ass";
-        await fs.writeFile(path.join(tmpDir, assName), toAss(cues), "utf8");
-        console.log("[assemble] captions", { cues: cues.length });
+        srtContent = toSrt(cues);
+        console.log("[assemble] captions", { cues: cues.length, preset: captionPreset });
       }
     }
 
     const outPath = path.join(tmpDir, "final.mp4");
-    await runFfmpeg(buildFfmpegArgs(probed, outPath, assName), tmpDir);
+    await runFfmpeg(buildFfmpegArgs(probed, outPath), tmpDir);
 
-    const bytes = await fs.readFile(outPath);
+    let bytes = await fs.readFile(outPath);
+    if (srtContent) {
+      if (!env.FAL_KEY) {
+        throw new Error("FAL_KEY is required to burn captions via VEED — add it to your env");
+      }
+      const captioned = await addSubtitlesVeed({
+        videoBytes: bytes,
+        srtContent,
+        preset: captionPreset,
+      });
+      bytes = Buffer.from(captioned.bytes);
+    }
     const remotePath = `${user.id}/${projectId}/final/${randomUUID()}.mp4`;
     const { error: upErr } = await svc.storage
       .from("media")
@@ -191,6 +207,9 @@ export async function assembleFinal(projectId: string) {
       meta: {
         kind: "rendered_mp4",
         bytes: bytes.length,
+        ...(srtContent
+          ? { caption_preset: captionPreset, subtitle_provider: "veed" as const }
+          : {}),
         pairs: pairs.map((p, i) => ({
           beatId: p.beatId,
           clipId: p.clip.id,
@@ -237,11 +256,7 @@ type ProbedPair = {
   voiceDur: number;
 };
 
-function buildFfmpegArgs(
-  pairs: ProbedPair[],
-  outPath: string,
-  assName: string | null,
-): string[] {
+function buildFfmpegArgs(pairs: ProbedPair[], outPath: string): string[] {
   const args: string[] = ["-y"];
 
   // Inputs: for each pair, the clip then the voice. Stills get -loop 1 -t
@@ -273,10 +288,7 @@ function buildFfmpegArgs(
   });
 
   const concatInputs = pairs.map((_, i) => `[v${i}][a${i}]`).join("");
-  // If captions: concat → [cv][outa], then burn ASS subs into [cv] → [outv].
-  const tail = assName
-    ? `${concatInputs}concat=n=${pairs.length}:v=1:a=1[cv][outa];[cv]subtitles='${assName}'[outv]`
-    : `${concatInputs}concat=n=${pairs.length}:v=1:a=1[outv][outa]`;
+  const tail = `${concatInputs}concat=n=${pairs.length}:v=1:a=1[outv][outa]`;
 
   const filterComplex = `${vFilters.join(";")};${aFilters.join(";")};${tail}`;
 
@@ -326,9 +338,9 @@ function runFfmpeg(args: string[], cwd?: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Captions — ASS, 3-word chunks, karaoke highlight, lower-third safe area.
+// Captions — SRT from ElevenLabs alignment, styled via VEED on Fal at assemble.
 
-type AssCue = { start: number; end: number; text: string };
+type SrtCue = { start: number; end: number; text: string };
 type WordTiming = { word: string; start: number; end: number };
 const WORDS_PER_CHUNK = 3;
 
@@ -390,23 +402,10 @@ function chunkWordTimings(words: WordTiming[], maxWords = WORDS_PER_CHUNK): Word
   return chunks;
 }
 
-function escapeAssText(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/\{/g, "\\{").replace(/\}/g, "\\}");
-}
-
-function buildKaraokeLine(words: WordTiming[]): string {
-  return words
-    .map((w) => {
-      const cs = Math.max(1, Math.round((w.end - w.start) * 100));
-      return `{\\k${cs}}${escapeAssText(w.word)}`;
-    })
-    .join(" ");
-}
-
 function buildCaptionCues(
   beats: { text: string | null; voiceDur: number; alignment: VoiceAlignment | null }[],
-): AssCue[] {
-  const cues: AssCue[] = [];
+): SrtCue[] {
+  const cues: SrtCue[] = [];
   let cursor = 0;
   for (const beat of beats) {
     const words = beat.alignment
@@ -417,7 +416,7 @@ function buildCaptionCues(
       cues.push({
         start: cursor + chunk[0].start,
         end: cursor + chunk[chunk.length - 1].end,
-        text: buildKaraokeLine(chunk),
+        text: chunk.map((w) => w.word).join(" "),
       });
     }
     cursor += beat.voiceDur;
@@ -425,47 +424,40 @@ function buildCaptionCues(
   return cues;
 }
 
-function toAss(cues: AssCue[]): string {
-  const header = `[Script Info]
-Title: Hookline captions
-ScriptType: v4.00+
-WrapStyle: 0
-PlayResX: ${W}
-PlayResY: ${H}
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial Black,46,&H00FFFFFF,&H0000FFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,2,1,2,48,48,140,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-`;
-  const lines = cues.map(
-    (c) =>
-      `Dialogue: 0,${assTs(c.start)},${assTs(c.end)},Default,,0,0,0,,${c.text}`,
-  );
-  return header + lines.join("\n") + "\n";
-}
-
-function assTs(secs: number): string {
-  const cs = Math.round(secs * 100);
-  const hh = Math.floor(cs / 360000);
-  const mm = Math.floor((cs % 360000) / 6000);
-  const ss = Math.floor((cs % 6000) / 100);
-  const cc = cs % 100;
+function srtTs(secs: number): string {
+  const ms = Math.round(secs * 1000);
+  const hh = Math.floor(ms / 3_600_000);
+  const mm = Math.floor((ms % 3_600_000) / 60_000);
+  const ss = Math.floor((ms % 60_000) / 1000);
+  const mmm = ms % 1000;
   const pad = (n: number, w: number) => String(n).padStart(w, "0");
-  return `${hh}:${pad(mm, 2)}:${pad(ss, 2)}.${pad(cc, 2)}`;
+  return `${pad(hh, 2)}:${pad(mm, 2)}:${pad(ss, 2)},${pad(mmm, 3)}`;
 }
 
-// ponytail: dev-only sanity check for alignment → word timing
+function toSrt(cues: SrtCue[]): string {
+  return cues
+    .map(
+      (c, i) =>
+        `${i + 1}\n${srtTs(c.start)} --> ${srtTs(c.end)}\n${c.text}\n`,
+    )
+    .join("\n");
+}
+
+// ponytail: dev-only sanity check for alignment → SRT
 if (process.env.NODE_ENV !== "production") {
-  const words = wordsFromAlignment({
-    characters: ["t", "r", "a", "n", "s", "f", "o", "r", "m", " ", "y", "o", "u", "r"],
-    characterStartTimesSeconds: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65],
-    characterEndTimesSeconds: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7],
-  });
-  console.assert(words.length === 2 && words[0].word === "transform");
+  const cues = buildCaptionCues([
+    {
+      text: "transform your sleep",
+      voiceDur: 1.2,
+      alignment: {
+        characters: ["t", "r", "a", "n", "s", "f", "o", "r", "m", " ", "y", "o", "u", "r"],
+        characterStartTimesSeconds: [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65],
+        characterEndTimesSeconds: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7],
+      },
+    },
+  ]);
+  const srt = toSrt(cues);
+  console.assert(cues.length >= 1 && srt.includes("00:00:00,000 -->"));
 }
 
 function probeDuration(file: string): Promise<number> {

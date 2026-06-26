@@ -8,7 +8,7 @@ export default async function ProductStep({ params }: { params: Promise<{ id: st
 
   const { data: project } = await supabase
     .from("projects")
-    .select("product_id, product_name, target_audience, customer_issues, benefits, runtime, captions")
+    .select("product_id, product_name, target_audience, customer_issues, benefits, runtime, captions, meta")
     .eq("id", id)
     .single();
 

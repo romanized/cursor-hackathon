@@ -8,7 +8,8 @@ import { chargeCredits, COST } from "@/lib/credits";
 // saveScript no longer touches credits — the Step 3 spend is the
 // generateScriptForProject AI call itself.
 import { generateScript as runGenerateScript } from "@/lib/providers/google";
-import type { TablesInsert, TablesUpdate } from "@/lib/db";
+import type { Json, TablesInsert, TablesUpdate } from "@/lib/db";
+import { parseSubtitlePreset } from "@/lib/media/subtitle-presets";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -48,10 +49,20 @@ export async function saveBrief(
     benefits: string;          // textarea, newline-separated
     runtime: "hook" | "full";
     captions: boolean;
+    caption_preset?: string;
   },
 ) {
   const { supabase } = await requireUser();
   const split = (s: string) => s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+
+  const { data: existing } = await supabase
+    .from("projects")
+    .select("meta")
+    .eq("id", projectId)
+    .single();
+  const meta = (existing?.meta ?? {}) as Record<string, Json>;
+  const captionPreset = parseSubtitlePreset(patch.caption_preset ?? meta.caption_preset);
+
   const { error } = await supabase
     .from("projects")
     .update({
@@ -61,6 +72,7 @@ export async function saveBrief(
       benefits: split(patch.benefits),
       runtime: patch.runtime,
       captions: patch.captions,
+      meta: { ...meta, caption_preset: captionPreset } as Json,
       current_step: 3,
     } satisfies TablesUpdate<"projects">)
     .eq("id", projectId);
