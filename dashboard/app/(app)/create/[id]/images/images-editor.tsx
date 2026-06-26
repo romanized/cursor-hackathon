@@ -20,12 +20,14 @@ export function ImagesEditor({
   beats,
   assets: initialAssets,
   mascotUrl: initialMascotUrl,
+  fixedMascot,
 }: {
   projectId: string;
   userId: string;
   beats: Beat[];
   assets: Asset[];
   mascotUrl: string | null;
+  fixedMascot: boolean;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -36,6 +38,8 @@ export function ImagesEditor({
   const [advancing, startAdvance] = useTransition();
   const [generating, startGenerate] = useTransition();
   const [mascotPending, startMascot] = useTransition();
+
+  const hasMascot = fixedMascot || Boolean(mascotUrl);
 
   // Keep only the latest asset row per beat (the server lists them all so we
   // can show processing/failed states; pick by priority: ready > processing > failed).
@@ -116,16 +120,20 @@ export function ImagesEditor({
         <div className="flex min-w-[200px] flex-1 flex-col gap-2">
           <span className="overline-muted">Mascot</span>
           <p className="text-sm text-muted">
-            One canonical character for the whole video. Beat images reuse this portrait so the mascot stays consistent across every scene.
+            {fixedMascot
+              ? "Fixed template mascot — the bundled reference image is used directly (no AI generation)."
+              : "One canonical character for the whole video. Beat images reuse this portrait so the mascot stays consistent across every scene."}
           </p>
-          {mascotUrl && (
+          {!fixedMascot && mascotUrl && (
             <p className="text-xs text-faint">Re-roll the mascot if you change template — then regenerate beat images.</p>
           )}
         </div>
-        <Button intent={mascotUrl ? "secondary" : "primary"} onClick={runMascot} disabled={mascotPending}>
-          <HugeiconsIcon icon={mascotUrl ? RefreshIcon : SparklesIcon} size={16} strokeWidth={1.6} />
-          {mascotPending ? "Generating…" : mascotUrl ? "Re-roll mascot" : "Generate mascot"}
-        </Button>
+        {!fixedMascot && (
+          <Button intent={mascotUrl ? "secondary" : "primary"} onClick={runMascot} disabled={mascotPending}>
+            <HugeiconsIcon icon={mascotUrl ? RefreshIcon : SparklesIcon} size={16} strokeWidth={1.6} />
+            {mascotPending ? "Generating…" : mascotUrl ? "Re-roll mascot" : "Generate mascot"}
+          </Button>
+        )}
       </Card>
 
       <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
@@ -138,12 +146,12 @@ export function ImagesEditor({
         <Button
           intent="primary"
           onClick={generateAll}
-          disabled={generating || !beats.length || allReady || !mascotUrl}
+          disabled={generating || !beats.length || allReady || !hasMascot}
         >
           <HugeiconsIcon icon={SparklesIcon} size={16} strokeWidth={1.6} />
           {generating
             ? `Generating ${pendingCount}…`
-            : !mascotUrl
+            : !hasMascot
               ? "Generate mascot first"
             : allReady
               ? "All beats covered"

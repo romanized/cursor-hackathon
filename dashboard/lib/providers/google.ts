@@ -2,7 +2,6 @@ import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
 import { env, requireServer } from "@/lib/env";
 import { fitTo916 } from "@/lib/media/fit-916";
-import { loadTemplateReferenceImage } from "@/lib/references/template-mascots";
 
 const REEL_ASPECT = "9:16" as const;
 const REEL_FRAMING =
@@ -69,32 +68,15 @@ export type BeatImageInput = {
 export async function generateMascotImage(input: {
   templateId: string | null;
 }): Promise<{ bytes: Buffer; mimeType: string }> {
-  const ref = await loadTemplateReferenceImage(input.templateId);
   const style = (input.templateId && MASCOT_STYLE[input.templateId]) || MASCOT_STYLE.skeleton_ai;
-
-  const prompt = ref
-    ? [
-        style,
-        "The supplied image is the character reference. Generate a NEW portrait of this EXACT same character — same cream fur, same French-bulldog puppy proportions, same big eyes, dark nose, upright ears, chubby belly, same whimsical 3D Pixar-style look — recomposed for a vertical reel. You may adjust pose and simplify the background but the character must be instantly recognisable as the same puppy from the reference.",
-        REEL_FRAMING,
-        "Single character portrait only. No product, no props, no text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
-      ].join("\n\n")
-    : [
-        style,
-        REEL_FRAMING,
-        "Single character portrait only. No product, no props, no text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
-      ].join("\n\n");
-
-  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
-  if (ref) {
-    parts.push({
-      inlineData: { mimeType: ref.mimeType, data: ref.bytes.toString("base64") },
-    });
-  }
-  parts.push({ text: prompt });
+  const prompt = [
+    style,
+    REEL_FRAMING,
+    "Single character portrait only. No product, no props, no text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
+  ].join("\n\n");
 
   try {
-    return await runImageGenerate({ parts });
+    return await runImageGenerate({ parts: [{ text: prompt }] });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!/PROHIBITED_CONTENT|SAFETY|BLOCKED/.test(msg)) throw e;

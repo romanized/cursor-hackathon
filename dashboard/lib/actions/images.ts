@@ -7,6 +7,8 @@ import { createService } from "@/lib/supabase/service";
 import { generateBeatImage, generateMascotImage } from "@/lib/providers/google";
 import { chargeCredits, COST } from "@/lib/credits";
 import { fitTo916 } from "@/lib/media/fit-916";
+import { seedStaticMascotIfNeeded } from "@/lib/mascot/static-mascot";
+import { hasTemplateReference } from "@/lib/references/template-mascots";
 import type { TablesInsert, TablesUpdate } from "@/lib/db";
 
 type ProjectMeta = { mascot_storage_path?: string | null };
@@ -128,6 +130,19 @@ export async function generateMascot(projectId: string) {
     .single();
   if (pErr || !project) throw pErr ?? new Error("project not found");
 
+  // Templates with a bundled reference image IS the mascot — never call Gemini.
+  if (hasTemplateReference(project.template_id)) {
+    const seeded = await seedStaticMascotIfNeeded({
+      supabase,
+      userId: user.id,
+      projectId,
+      templateId: project.template_id,
+      meta: (project.meta ?? {}) as ProjectMeta,
+    });
+    revalidatePath(`/create/${projectId}/images`);
+    return { url: seeded.url, cleared: false, static: true };
+  }
+
   const meta = (project.meta ?? {}) as ProjectMeta;
   const isReroll = Boolean(meta.mascot_storage_path);
   if (isReroll) {
@@ -159,7 +174,7 @@ export async function generateMascot(projectId: string) {
   const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
   revalidatePath(`/create/${projectId}/images`);
   revalidatePath(`/create/${projectId}`, "layout");
-  return { url: signed?.signedUrl ?? null, cleared: isReroll };
+  return { url: signed?.signedUrl ?? null, cleared: isReroll, static: false };
 }
 
 /**
@@ -192,6 +207,20 @@ export async function generateBeatImages(projectId: string) {
 
   if (!project) throw new Error("project not found");
   if (!beats?.length) throw new Error("no beats — write the script first");
+
+  let mascotPath = (project.meta as ProjectMeta | null)?.mascot_storage_path ?? null;
+  if (hasTemplateReference(project.template_id)) {
+    const seeded = await seedStaticMascotIfNeeded({
+      supabase,
+      userId: user.id,
+      projectId,
+      templateId: project.template_id,
+      meta: project.meta as ProjectMeta,
+    });
+    mascotPath = seeded.path ?? mascotPath;
+  } else if (!mascotPath) {
+    throw new Error("generate the mascot first");
+  }
 
   const readyBeatIds = new Set(
     (existing ?? []).filter((a) => a.status === "ready").map((a) => a.beat_id),
@@ -227,7 +256,6 @@ export async function generateBeatImages(projectId: string) {
 
   // Mascot reference — canonical character portrait from Step 4.
   let mascotImage: { bytes: Buffer; mimeType: string } | null = null;
-  const mascotPath = (project.meta as ProjectMeta | null)?.mascot_storage_path;
   if (mascotPath) {
     mascotImage = await loadImageBytes(svc, mascotPath);
     if (!mascotImage) console.warn("[generateBeatImages] mascot download failed", { mascotPath });
