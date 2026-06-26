@@ -7,6 +7,17 @@ Iedereen in de repo kan met de DB werken via de **Supabase CLI** én de **MCP-se
 (zodat de AI/agent de DB kan aansturen). Secrets staan **nooit** in git — alleen in je
 eigen lokale `.env`.
 
+## Snelste weg: het setup-script
+
+Na het clonen, vanuit de repo-root:
+
+```bash
+./scripts/setup-db.sh
+```
+
+Dit maakt je `.env`, logt je in, en linkt je clone aan het project. Wil je het
+liever met de hand, volg dan de stappen hieronder.
+
 ## Eenmalige setup (elke teammate)
 
 1. **Persoonlijke access token** aanmaken:
