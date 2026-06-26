@@ -132,6 +132,12 @@ export function Hero({ id, className }: SectionProps) {
             markers: SCROLL_MARKERS,
           },
       dependencies: [staticLayout, reducedMotion],
+      // The reel builder measures the LIVE viewport (per-card vertical clamp reads
+      // window AR; headline word widths measured in px). invalidateOnRefresh can't
+      // re-run the builder, so without this a resize that changes AR / the clamp(…)
+      // font size would leave those baked values stale. Rebuild the scene on a
+      // debounced resize so the clamp + word-widths re-read the current viewport.
+      rebuildOnRefresh: true,
     },
   );
 
@@ -418,7 +424,7 @@ function HeroNav() {
     <header className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-4">
       <nav
         aria-label="Primary"
-        className="flex w-full max-w-4xl items-center justify-between gap-4 rounded-pill border border-hairline bg-surface/60 py-2 pl-5 pr-2 backdrop-blur-xl"
+        className="relative flex w-full max-w-4xl items-center justify-between gap-4 rounded-pill border border-hairline bg-surface/60 py-2 pl-5 pr-2 backdrop-blur-xl"
       >
         {/* Wordmark only — the mono tagline was removed for a cleaner nav. */}
         <a
@@ -432,9 +438,11 @@ function HeroNav() {
           {SITE.name}
         </a>
 
-        {/* Center/right nav links — quiet text, hover lifts to fg. Hidden on
+        {/* Center nav links — TRULY centered to the pill (absolute, translate-x
+            -1/2) so the uneven wordmark/CTA widths can't pull them off-center the
+            way plain justify-between did. Quiet text, hover lifts to fg. Hidden on
             narrow screens where the pill would crowd; the CTA stays. */}
-        <ul className="hidden items-center gap-7 font-sans text-sm text-muted md:flex">
+        <ul className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-7 font-sans text-sm text-muted md:flex">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <a

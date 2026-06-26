@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { gsap, useGSAP, EASE_EXPO } from "@/lib/gsap/register";
 import { REVEAL_DEFAULTS } from "@/lib/gsap/scrollTrigger";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -32,6 +32,18 @@ export interface UseScrollSceneOptions {
   timeline?: Omit<gsap.TimelineVars, "scrollTrigger">;
   /** Re-run dependencies forwarded to `useGSAP`. */
   dependencies?: unknown[];
+  /**
+   * Rebuild the WHOLE scene on every `ScrollTrigger.refresh()` (which fires on
+   * window resize by default). Opt-in for scenes whose builder measures the live
+   * viewport / element sizes at build time — e.g. the hero reel reads
+   * `window.innerWidth/innerHeight` for its per-card vertical clamp and measures
+   * headline word widths in px. `invalidateOnRefresh` alone does NOT re-run the
+   * builder, so those baked values would otherwise go stale after a resize. When
+   * set, a refresh bumps an internal tick fed into `useGSAP`'s deps, so the
+   * builder re-executes and re-reads the live viewport. Debounced by ScrollTrigger's
+   * own batched refresh, so it costs one rebuild per settle, not per resize event.
+   */
+  rebuildOnRefresh?: boolean;
 }
 
 /**
@@ -61,7 +73,35 @@ export function useScrollScene(
   // the client confirms the user's preference.
   const reducedMotion = reducedMotionResolved !== false;
 
-  const { scrollTrigger, timeline, dependencies } = options;
+  const { scrollTrigger, timeline, dependencies, rebuildOnRefresh } = options;
+
+  // For builders that measure the live viewport at build time (e.g. the hero reel's
+  // per-card clamp + headline word widths): bump a tick on a DEBOUNCED window resize
+  // so `useGSAP` re-runs the builder and the measurements re-read the current
+  // viewport. We key off our OWN resize listener (not ScrollTrigger's refresh) to
+  // stay recursion-safe — re-running the builder internally triggers a refresh, so
+  // listening to refresh here would loop. The rebuild re-reads `window.*` and
+  // re-measures, and `useGSAP`'s revert/recreate refreshes ScrollTrigger for us.
+  // No-op unless `rebuildOnRefresh`, and skipped while reduced motion / unbound.
+  const [refreshTick, setRefreshTick] = useState(0);
+  useEffect(() => {
+    if (!rebuildOnRefresh || reducedMotion || scrollTrigger === false) return;
+    let frame = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onResize = () => {
+      window.clearTimeout(timer);
+      // Settle for 200ms after the last resize event, then rebuild once.
+      timer = setTimeout(() => {
+        frame = window.requestAnimationFrame(() => setRefreshTick((t) => t + 1));
+      }, 200);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [rebuildOnRefresh, reducedMotion, scrollTrigger]);
 
   useGSAP(
     (context, contextSafe) => {
@@ -96,6 +136,11 @@ export function useScrollScene(
         tl.progress(1).pause();
       }
     },
-    { scope: scopeRef, dependencies: dependencies ?? [reducedMotion] },
+    {
+      scope: scopeRef,
+      // `refreshTick` only changes when `rebuildOnRefresh` is set and a debounced
+      // resize fires, so it's inert for every other scene.
+      dependencies: [...(dependencies ?? [reducedMotion]), refreshTick],
+    },
   );
 }

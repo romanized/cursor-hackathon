@@ -1,6 +1,6 @@
 "use client";
 
-import { gsap, EASE_EXPO } from "@/lib/gsap/register";
+import { gsap } from "@/lib/gsap/register";
 import {
   REEL_CARDS,
   TRACK_VW,
@@ -19,10 +19,11 @@ import {
  * frame). This sideways, scroll-controlled motion is the site's signature.
  *
  * The same timeline also drives, on the SAME 0->1 progress:
- *  - a gentle per-card depth parallax (nearer cards drift a touch more) + a
- *    tasteful wave-in as each card sweeps into frame + a SUBTLE momentum LEAN
- *    (the card rotates a few extra deg into its travel direction as it crosses
- *    center, then eases back to its resting right-lean — rotation-only),
+ *  - a gentle per-card depth parallax (nearer cards drift a touch more) + a soft
+ *    OPACITY fade-in as each card sweeps into frame (no vertical hop, so the scroll
+ *    stays buttery) + a SUBTLE FACING FLIP (the card rests nearly upright with a
+ *    seeded left/right tilt, then as it crosses center eases through zero to the
+ *    OPPOSITE facing and holds — rotation-only),
  *  - the EVOLVING HEADLINE word-swap (three overflow-clip slab masks that roll the
  *    middle word UPWARD and LAND on the last: "any product" -> "any link" ->
  *    "any idea"), spaced out over GENEROUS progress windows so each reads cleanly,
@@ -65,11 +66,11 @@ type TimelineBuilder = (tl: GSAPTimeline) => void;
 const LIFT_AT = 0.9;
 
 /**
- * Half-width (in timeline progress) of the per-card momentum-lean window. The
- * card ramps from its resting tilt to peak lean over the LEAN_HALF before it
- * crosses viewport-center, then eases back over the LEAN_HALF after — a short,
- * symmetric "in motion" swing. Kept small so the lean is subtle and the swing
- * stays well inside the pan window [0, LIFT_AT].
+ * Half-width (in timeline progress) of the per-card FACING-FLIP window. The flip
+ * runs over [cross - LEAN_HALF, cross + LEAN_HALF] around the point the card
+ * crosses viewport-center, easing the rotation from its resting tilt through zero
+ * to the opposite facing. Kept small so the flip is a clean, contained switch (not
+ * a slow drift), and stays well inside the pan window [0, LIFT_AT].
  */
 const LEAN_HALF = 0.12;
 
@@ -77,8 +78,9 @@ const LEAN_HALF = 0.12;
  * Compute the pan distance as an xPercent of the TRACK's own width. The stage
  * clips to 100vw; the track is TRACK_VW wide, so it must travel (TRACK_VW - 100)
  * vw leftward to bring its far end into view. As a percent of its own width that
- * is -(TRACK_VW - 100) / TRACK_VW * 100. Recomputed on refresh via
- * `invalidateOnRefresh` so it stays correct across resizes.
+ * is -(TRACK_VW - 100) / TRACK_VW * 100. Viewport-INDEPENDENT (depends only on the
+ * TRACK_VW constant), and the pan uses xPercent of the track's own vw width, so it
+ * stays geometrically correct across resizes with no recompute needed.
  */
 function panEndXPercent(): number {
   return -((TRACK_VW - 100) / TRACK_VW) * 100;
@@ -89,18 +91,20 @@ function panEndXPercent(): number {
  * on ANY aspect ratio. A card of width WIDTH_VW vw renders
  * `WIDTH_VW * R * scale * AR` vh tall, where AR = innerWidth/innerHeight is read
  * LIVE from the current viewport (so the math tracks the user's real aspect — a
- * 16:9 monitor and a 16:10 MacBook resolve to the same on-screen result). The
- * scene is rebuilt on every `ScrollTrigger.refresh()` (the trigger sets
- * `invalidateOnRefresh: true`), so this recomputes on resize automatically.
+ * 16:9 monitor and a 16:10 MacBook resolve to the same on-screen result). This is
+ * read once at BUILD time and baked into the resting yPercent, so to stay correct
+ * across resizes the scene must be REBUILT — `Hero.tsx` passes `rebuildOnRefresh`
+ * to `useScrollScene`, which re-runs the builder on a debounced resize so this
+ * re-reads the live viewport. (`invalidateOnRefresh` alone can't do it — it only
+ * re-records existing tween vars, and this is applied via `gsap.set`, not a tween.)
  *
  * If the card's top edge would sit above MIN_TOP_VH or its bottom below
  * (100 - MIN_TOP_VH), we return a yPercent of its OWN height that nudges it back
  * inside the safe band [MIN_TOP_VH, 100 - MIN_TOP_VH] = [7vh, 93vh]. With the
- * gentle bands picked in `Hero.reel.ts` (tops ~30-32, bottoms ~60) and
- * WIDTH_VW = 13, this clamp is a no-op at common ARs (16:10 / 16:9 / 3:2) and only
- * engages on extreme ultrawide / very short viewports — but when it does, every
- * frame stays comfortably on-screen. Transform-only; baked into the resting
- * yPercent.
+ * bands picked in `Hero.reel.ts` (tops ~28-29, bottoms ~76) and WIDTH_VW = 13, this
+ * clamp is a no-op at common ARs (16:10 / 16:9 / 3:2, AR <= ~2.0) and only engages
+ * on extreme ultrawide / very short viewports — but when it does, every frame stays
+ * comfortably on-screen. Transform-only; baked into the resting yPercent.
  */
 const MIN_TOP_VH = 7;
 function clampYPercent(def: ReelCardDef): number {
@@ -168,59 +172,64 @@ export function buildReelScene(
       if (!def) return;
       const clampY = clampYPercent(def);
 
+      // Signed resting tilt from the seeded facing, and the OPPOSITE-facing target
+      // the flip lands on. `dir` is +1 for a right-leaning card, -1 for a left one.
+      const dir = def.faceRight ? 1 : -1;
+      const restRot = dir * def.rotateDeg;
+      const flipRot = -dir * def.leanDeg;
+
+      // Progress where this card reaches ~viewport-center (drives the flip + the
+      // soft fade-in). leftVw maps to (leftVw - 50) / span, clamped to the pan.
+      const enterAt = Math.min(
+        Math.max((def.leftVw - 50) / span, 0),
+        LIFT_AT - 0.08,
+      );
+      // Cards already in frame at rest (enterAt ~ 0, e.g. c1) start VISIBLE so they
+      // never flash at the very top of the pin; the rest fade in as they arrive.
+      const startsVisible = enterAt <= 0.001;
+
       el.style.willChange = "transform";
 
-      // Resting pose: at depth scale + the RESTING RIGHT-LEAN tilt, nudged by the
-      // vertical clamp. Cards start slightly low + soft so they "wave in" as they
-      // sweep into frame. The momentum lean below tweens rotation ON TOP of this.
+      // Resting pose: depth scale + the (straightened, signed) resting tilt, nudged
+      // by the vertical clamp. autoAlpha is an opacity-only settle (NOT a yPercent
+      // hop, which was the old scroll "bounce"). The facing-flip rotates ON TOP.
       gsap.set(el, {
         scale: def.scale,
-        rotation: def.rotateDeg,
+        rotation: restRot,
         yPercent: clampY,
         xPercent: 0,
-        autoAlpha: 1,
+        autoAlpha: startsVisible ? 1 : 0,
         transformOrigin: "center center",
       });
 
-      // MOMENTUM LEAN (rotation-only, transform-only): as the card travels
-      // leftward across the viewport, it leans a few extra deg INTO that motion
-      // and then eases back to its resting right-lean — a physical "in motion"
-      // feel, not a reposition. The card center crosses viewport-center (50vw) at
-      // progress ~ (leftVw - 50) / span; we peak the rotation there (rotateDeg ->
-      // rotateDeg + leanDeg) and settle it back over a short window after. The
-      // tween lives entirely within the pan [0, LIFT_AT]; because the master
-      // timeline is scrubbed, it REVERSES on scroll-up for free. Skipped under
-      // reduced motion (that fork rests on the tilt only — see
-      // `applyReelStaticState`). `immediateRender:false` keeps the resting tilt
-      // set above intact until the lean window is reached.
+      // FACING FLIP (rotation-only, transform-only): as the card travels leftward
+      // and crosses viewport-center (50vw, at progress ~ (leftVw - 50) / span), its
+      // rotation eases from the resting tilt THROUGH zero to the OPPOSITE facing
+      // (restRot -> flipRot) and HOLDS there for the rest of the pan — the card
+      // visibly switches which way it faces, once, cleanly. The single tween spans a
+      // symmetric window around center (LEAN_HALF either side); because the master
+      // timeline is scrubbed it REVERSES on scroll-up for free. Skipped under reduced
+      // motion (that fork rests on the signed tilt only — see `applyReelStaticState`).
+      // `immediateRender:false` keeps the resting tilt set above intact until the
+      // flip window is reached.
       //
-      // Cards already past center at rest (leftVw < 50, e.g. c1) never cross
-      // during the pan — `cross` clamps to 0 and the swing collapses, so they
-      // simply hold their resting right-lean (the `cross > 0` guard skips the
-      // degenerate window).
+      // Cards whose center never reaches viewport-center during the pan (leftVw < 50,
+      // e.g. c1) clamp `cross` to 0; the `cross > 0` guard skips them so they simply
+      // hold their resting facing.
       const cross = Math.min(Math.max((def.leftVw - 50) / span, 0), LIFT_AT);
       if (cross > 0) {
-        const leanIn = Math.max(cross - LEAN_HALF, 0);
-        const leanOut = Math.min(cross + LEAN_HALF, LIFT_AT);
+        const flipStart = Math.max(cross - LEAN_HALF, 0);
+        const flipEnd = Math.min(cross + LEAN_HALF, LIFT_AT);
         tl.fromTo(
           el,
-          { rotation: def.rotateDeg },
+          { rotation: restRot },
           {
-            rotation: def.rotateDeg + def.leanDeg,
+            rotation: flipRot,
             ease: "sine.inOut",
-            duration: cross - leanIn,
+            duration: flipEnd - flipStart,
             immediateRender: false,
           },
-          leanIn,
-        );
-        tl.to(
-          el,
-          {
-            rotation: def.rotateDeg,
-            ease: "sine.inOut",
-            duration: leanOut - cross,
-          },
-          cross,
+          flipStart,
         );
       }
 
@@ -235,22 +244,13 @@ export function buildReelScene(
         0,
       );
 
-      // Wave-in: as a card enters its stretch of the track, lift it the last few
-      // vh into its resting yPercent with the signature ease. Tied to where the
-      // card center crosses ~viewport-center: its on-track center is leftVw, the
-      // pan brings center-of-viewport (50vw) to it at progress
-      // ~ (leftVw - 50) / (TRACK_VW - 100), clamped to [0,1]. Card 1 (already in
-      // frame at rest) waves in right at the very start. (`span` hoisted above.)
-      const enterAt = Math.min(
-        Math.max((def.leftVw - 50) / span, 0),
-        LIFT_AT - 0.06,
-      );
-      tl.fromTo(
-        el,
-        { yPercent: clampY + 6 },
-        { yPercent: clampY, ease: EASE_EXPO, duration: 0.06, immediateRender: false },
-        enterAt,
-      );
+      // Soft arrival: fade the card in (opacity only) as it enters its stretch of
+      // the track — the gentle "wave-in" with ZERO vertical hop, so the scroll stays
+      // buttery (the old yPercent fromTo snapped +6% in on scrub and read as a jolt).
+      // Cards that start visible (c1) skip this; the rest fade up at `enterAt`.
+      if (!startsVisible) {
+        tl.to(el, { autoAlpha: 1, ease: "none", duration: 0.08 }, enterAt);
+      }
     });
 
     // --- EVOLVING HEADLINE WORD-SWAP (3 words, PROGRESS + LAND, no revert) --
@@ -398,16 +398,17 @@ export function applyReelStaticState(root: HTMLElement): () => void {
     }
   }
 
-  // Reduced motion / mobile: skip the scrubbed momentum lean but KEEP the resting
-  // RIGHT-LEAN tilt (a calm static read, not a flat upright grid). Each card holds
-  // its own `rotateDeg`; unmatched nodes fall back to 0.
+  // Reduced motion / mobile: skip the scrubbed facing flip but KEEP the resting
+  // signed tilt (a calm static read, not a flat upright grid). Each card holds its
+  // own seeded facing: (faceRight ? +1 : -1) * rotateDeg; unmatched nodes -> 0.
   const byId = new Map<string, ReelCardDef>(REEL_CARDS.map((c) => [c.id, c]));
   cards.forEach((el) => {
     const def = byId.get(el.dataset.cardId ?? "");
+    const restRot = def ? (def.faceRight ? 1 : -1) * def.rotateDeg : 0;
     gsap.set(el, {
       autoAlpha: 1,
       scale: 1,
-      rotation: def?.rotateDeg ?? 0,
+      rotation: restRot,
       xPercent: 0,
       yPercent: 0,
       clearProps: "willChange",

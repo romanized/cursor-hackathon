@@ -20,17 +20,22 @@
  * - `topVh` — the card's CENTER vertically, in vh. The five values ALTERNATE
  *   top/bottom so the cards trace a zig-zag ribbon as they pan past.
  * - `scale` — resting depth.
- * - `rotateDeg` — the card's RESTING tilt, deg. The baseline now LEANS RIGHT
- *   (positive ~ +4..+7) with slight per-card variation — the whole reel reads as
- *   "in motion to the right" at rest. `Hero.animation.ts` lays a SUBTLE scrubbed
- *   rotation tween ON TOP of this resting tilt (it is never a static-only value
- *   anymore — see `leanDeg`).
- * - `leanDeg` — the EXTRA rotation (deg) added as the card crosses viewport
- *   center, a momentum "lean into the travel direction" (cards travel leftward as
- *   the track pans, so a small positive nudge reads as leaning further with the
- *   motion). Applied by `Hero.animation.ts` as a transform-only scrubbed tween:
- *   rotateDeg -> rotateDeg + leanDeg at center, then eased back. Reverses on
- *   scroll-up; skipped entirely under reduced motion (resting tilt only).
+ * - `rotateDeg` — the card's RESTING tilt MAGNITUDE, deg. STRAIGHTENED to a small
+ *   ~2..3 (down from the old +4..+7) so the reel reads nearly upright at rest with
+ *   just a hint of life. The SIGN is NOT baked here — it comes from `faceRight`
+ *   below, so the rest tilt is `(faceRight ? +1 : -1) * rotateDeg`. `Hero.animation.ts`
+ *   lays the scrubbed FACING-FLIP tween on top (see `leanDeg`).
+ * - `faceRight` — the card's RESTING facing: `true` leans RIGHT (+rotateDeg),
+ *   `false` leans LEFT (-rotateDeg). Seeded per card in a clean alternating-ish
+ *   pattern (not all one way, not strictly A-B-A-B chaotic) so the cards face a
+ *   subtle MIX of left/right at rest.
+ * - `leanDeg` — the FACING-FLIP magnitude (deg). As the card crosses viewport
+ *   center while panning, `Hero.animation.ts` SWITCHES its facing: it eases the
+ *   rotation from its resting tilt THROUGH zero to the OPPOSITE side
+ *   (`-(faceRight?+1:-1) * leanDeg`), so the card visibly flips which way it faces.
+ *   After the card clears center the flipped facing holds. Transform-only scrubbed
+ *   tween; reverses on scroll-up; skipped entirely under reduced motion (resting
+ *   tilt only). Kept small so the flip is clean, never chaotic.
  * - `driftVw` — a small extra horizontal parallax drift (vw) applied as the pan
  *   runs, so nearer cards (bigger scale) slide a touch faster than farther ones —
  *   depth without breaking the 1:1 scroll feel.
@@ -75,15 +80,22 @@ export interface ReelCardDef {
   /** Resting scale (depth). */
   readonly scale: number;
   /**
-   * Resting tilt, deg. Baseline LEANS RIGHT (positive ~ +4..+7) with slight
-   * per-card variation. `Hero.animation.ts` adds a subtle scrubbed lean on top.
+   * Resting tilt MAGNITUDE, deg (small, ~2..3 — straightened). The signed resting
+   * rotation is `(faceRight ? +1 : -1) * rotateDeg`. `Hero.animation.ts` adds the
+   * scrubbed facing-flip on top.
    */
   readonly rotateDeg: number;
   /**
-   * Extra rotation (deg) added as the card crosses viewport center — a momentum
-   * "lean into the travel direction" (cards travel leftward; a small positive
-   * nudge leans further with the motion). Transform-only scrubbed tween in
-   * `Hero.animation.ts`; reverses on scroll-up; skipped under reduced motion.
+   * Resting facing: `true` = leans RIGHT (+rotateDeg), `false` = leans LEFT
+   * (-rotateDeg). Seeded per card so the reel faces a subtle mix at rest.
+   */
+  readonly faceRight: boolean;
+  /**
+   * FACING-FLIP magnitude, deg. As the card crosses viewport center it eases from
+   * its resting tilt THROUGH zero to the OPPOSITE facing (magnitude `leanDeg`), so
+   * it visibly switches which way it faces, then holds. Transform-only scrubbed
+   * tween in `Hero.animation.ts`; reverses on scroll-up; skipped under reduced
+   * motion.
    */
   readonly leanDeg: number;
   /** Extra horizontal parallax drift (vw) over the pan; signed for depth. */
@@ -124,84 +136,89 @@ export function posterSrc(video: ReelVideo): string {
  * zig-zag the spec locks. `leftVw` is the on-track center: card 1 sits near the
  * start (visible at rest), the rest are spread rightward (48vw center-to-center —
  * tighter than before, but a 13vw card never overlaps its neighbour) so they sweep
- * into the viewport one after another as the track pans. `topVh` ALTERNATES with
- * bands tuned for a touch MORE vertical separation — tops ~23-24vh, bottoms ~73vh —
- * so the up/down ribbon reads more clearly while every full frame still stays on
- * screen (bottom edge at AR 1.6 lands ~86vh <= 93). The vertical clamp in
- * `Hero.animation.ts` then guarantees [7vh, 93vh] on any aspect ratio. `driftVw`
- * adds depth parallax.
+ * into the viewport one after another as the track pans. `topVh` ALTERNATES; BOTH
+ * bands were nudged DOWN a touch — tops ~28-29vh (was ~23-24), bottoms ~76vh (was
+ * ~73) — lowering the whole ribbon while every full frame still stays on screen:
+ * at AR 1.6 the lowest bottom edge lands ~89vh (<= 93) and the highest top edge
+ * ~13.6vh (>= 7). The vertical clamp in `Hero.animation.ts` then guarantees
+ * [7vh, 93vh] on ANY aspect ratio (ultrawide / short viewports), so the down-shift
+ * never pushes a frame off-screen. `driftVw` adds depth parallax.
  *
- * RESTING LEAN (the new baseline): every card now RESTS rotated to the RIGHT
- * (positive tilt ~ +4..+7) with slight per-card variation, so the reel reads as
- * "in motion to the right" even at rest. `leanDeg` is the SUBTLE extra rotation
- * each card picks up as it crosses viewport center — a momentum lean in the
- * travel direction (transform-only, eased back, reverses on scroll-up; see
- * `Hero.animation.ts`). leftVw / topVh / scale / driftVw are UNCHANGED — this
- * change is rotation-only, never repositioning.
+ * RESTING TILT (straightened) + FACING FLIP: every card now rests NEARLY UPRIGHT —
+ * a small ~2..3 magnitude — and its facing (`faceRight`) is SEEDED so the reel is a
+ * subtle MIX of left- and right-leaning cards at rest, not all one way. `leanDeg`
+ * is the FACING-FLIP magnitude: as each card crosses viewport center it eases from
+ * its resting tilt THROUGH zero to the OPPOSITE facing, visibly switching which way
+ * it faces, then holds (transform-only, reverses on scroll-up; see
+ * `Hero.animation.ts`). leftVw / scale / driftVw layout math is otherwise stable.
  */
 export const REEL_CARDS: readonly ReelCardDef[] = [
   {
     id: "c1",
     video: "skeleton_1",
     tick: "9:16",
-    // TOP band, nudged a touch HIGHER (27 -> 24) for more ribbon separation —
-    // visible at rest near the start of the track.
+    // TOP band, nudged DOWN (24 -> 29). Visible at rest near the start of the track.
     leftVw: 22,
-    topVh: 24,
+    topVh: 29,
     scale: 1.0,
-    rotateDeg: 5,
-    leanDeg: 3,
+    rotateDeg: 2.5,
+    faceRight: true,
+    leanDeg: 2.5,
     driftVw: -2.5,
   },
   {
     id: "c2",
     video: "simpson_1",
     tick: "9:16",
-    // LOWER band, nudged a touch DOWN (70 -> 73), drifting toward center.
-    // Bottom edge at AR 1.6: 73 + (13*1.3306*0.95*1.6)/2 = 86.1vh <= 93 (no clip).
+    // LOWER band, nudged DOWN (73 -> 76), drifting toward center. Bottom edge at
+    // AR 1.6: 76 + (13*1.3306*0.95*1.6)/2 = 89.1vh <= 93 (no clip).
     leftVw: 70,
-    topVh: 73,
+    topVh: 76,
     scale: 0.95,
-    rotateDeg: 6.5,
-    leanDeg: 2.5,
+    rotateDeg: 3,
+    faceRight: false,
+    leanDeg: 3,
     driftVw: 1.5,
   },
   {
     id: "c3",
     video: "skeleton_2",
     tick: "9:16",
-    // HIGH / center apex of the ribbon, nudged HIGHER (26 -> 23). Top edge at
-    // AR 1.6: 23 - (13*1.3306*1.04*1.6)/2 = 8.6vh >= 7 (no clip).
+    // HIGH / center apex of the ribbon, nudged DOWN (23 -> 28). Top edge at AR 1.6:
+    // 28 - (13*1.3306*1.04*1.6)/2 = 13.6vh >= 7 (no clip).
     leftVw: 118,
-    topVh: 23,
+    topVh: 28,
     scale: 1.04,
-    rotateDeg: 4,
-    leanDeg: 3.5,
+    rotateDeg: 2,
+    faceRight: true,
+    leanDeg: 2.5,
     driftVw: -3,
   },
   {
     id: "c4",
     video: "simpson_2",
     tick: "9:16",
-    // LOWER band, nudged a touch DOWN (70 -> 73), toward center (mirror of c2).
-    // Bottom edge at AR 1.6: 73 + (13*1.3306*0.95*1.6)/2 = 86.1vh <= 93 (no clip).
+    // LOWER band, nudged DOWN (73 -> 76), toward center (mirror of c2). Bottom edge
+    // at AR 1.6: 76 + (13*1.3306*0.95*1.6)/2 = 89.1vh <= 93 (no clip).
     leftVw: 166,
-    topVh: 73,
+    topVh: 76,
     scale: 0.95,
-    rotateDeg: 6,
-    leanDeg: 2.5,
+    rotateDeg: 3,
+    faceRight: true,
+    leanDeg: 3,
     driftVw: 1.5,
   },
   {
     id: "c5",
     video: "skeleton_3",
     tick: "9:16",
-    // TOP band, nudged a touch HIGHER (27 -> 24) — sweeps in last (mirror of c1).
+    // TOP band, nudged DOWN (24 -> 29) — sweeps in last (mirror of c1).
     leftVw: 210,
-    topVh: 24,
+    topVh: 29,
     scale: 1.0,
-    rotateDeg: 5,
-    leanDeg: 3,
+    rotateDeg: 2.5,
+    faceRight: false,
+    leanDeg: 2.5,
     driftVw: -2,
   },
 ] as const;
