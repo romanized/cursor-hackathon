@@ -20,7 +20,9 @@ import {
  *
  * The same timeline also drives, on the SAME 0->1 progress:
  *  - a gentle per-card depth parallax (nearer cards drift a touch more) + a
- *    tasteful wave-in as each card sweeps into frame,
+ *    tasteful wave-in as each card sweeps into frame + a SUBTLE momentum LEAN
+ *    (the card rotates a few extra deg into its travel direction as it crosses
+ *    center, then eases back to its resting right-lean — rotation-only),
  *  - the EVOLVING HEADLINE word-swap (three overflow-clip slab masks that roll the
  *    middle word UPWARD and LAND on the last: "any product" -> "any link" ->
  *    "any idea"), spaced out over GENEROUS progress windows so each reads cleanly,
@@ -61,6 +63,15 @@ type TimelineBuilder = (tl: GSAPTimeline) => void;
 
 /** Progress where the end-of-reel lift handoff begins (text + cards clear). */
 const LIFT_AT = 0.9;
+
+/**
+ * Half-width (in timeline progress) of the per-card momentum-lean window. The
+ * card ramps from its resting tilt to peak lean over the LEAN_HALF before it
+ * crosses viewport-center, then eases back over the LEAN_HALF after — a short,
+ * symmetric "in motion" swing. Kept small so the lean is subtle and the swing
+ * stays well inside the pan window [0, LIFT_AT].
+ */
+const LEAN_HALF = 0.12;
 
 /**
  * Compute the pan distance as an xPercent of the TRACK's own width. The stage
@@ -147,6 +158,11 @@ export function buildReelScene(
     }
 
     // --- PER-CARD RESTING STATE + WAVE-IN + DEPTH DRIFT --------------------
+    // Progress span the pan covers: bringing viewport-center (50vw) onto a card
+    // whose on-track center is `leftVw` happens at progress (leftVw - 50) / span.
+    // Shared by the momentum lean and the wave-in below.
+    const span = TRACK_VW - 100;
+
     cardEls.forEach((el) => {
       const def = byId.get(el.dataset.cardId ?? "");
       if (!def) return;
@@ -154,8 +170,9 @@ export function buildReelScene(
 
       el.style.willChange = "transform";
 
-      // Resting pose: at depth scale + static tilt, nudged by the vertical clamp.
-      // Cards start slightly low + soft so they "wave in" as they sweep into frame.
+      // Resting pose: at depth scale + the RESTING RIGHT-LEAN tilt, nudged by the
+      // vertical clamp. Cards start slightly low + soft so they "wave in" as they
+      // sweep into frame. The momentum lean below tweens rotation ON TOP of this.
       gsap.set(el, {
         scale: def.scale,
         rotation: def.rotateDeg,
@@ -164,6 +181,48 @@ export function buildReelScene(
         autoAlpha: 1,
         transformOrigin: "center center",
       });
+
+      // MOMENTUM LEAN (rotation-only, transform-only): as the card travels
+      // leftward across the viewport, it leans a few extra deg INTO that motion
+      // and then eases back to its resting right-lean — a physical "in motion"
+      // feel, not a reposition. The card center crosses viewport-center (50vw) at
+      // progress ~ (leftVw - 50) / span; we peak the rotation there (rotateDeg ->
+      // rotateDeg + leanDeg) and settle it back over a short window after. The
+      // tween lives entirely within the pan [0, LIFT_AT]; because the master
+      // timeline is scrubbed, it REVERSES on scroll-up for free. Skipped under
+      // reduced motion (that fork rests on the tilt only — see
+      // `applyReelStaticState`). `immediateRender:false` keeps the resting tilt
+      // set above intact until the lean window is reached.
+      //
+      // Cards already past center at rest (leftVw < 50, e.g. c1) never cross
+      // during the pan — `cross` clamps to 0 and the swing collapses, so they
+      // simply hold their resting right-lean (the `cross > 0` guard skips the
+      // degenerate window).
+      const cross = Math.min(Math.max((def.leftVw - 50) / span, 0), LIFT_AT);
+      if (cross > 0) {
+        const leanIn = Math.max(cross - LEAN_HALF, 0);
+        const leanOut = Math.min(cross + LEAN_HALF, LIFT_AT);
+        tl.fromTo(
+          el,
+          { rotation: def.rotateDeg },
+          {
+            rotation: def.rotateDeg + def.leanDeg,
+            ease: "sine.inOut",
+            duration: cross - leanIn,
+            immediateRender: false,
+          },
+          leanIn,
+        );
+        tl.to(
+          el,
+          {
+            rotation: def.rotateDeg,
+            ease: "sine.inOut",
+            duration: leanOut - cross,
+          },
+          cross,
+        );
+      }
 
       // Depth parallax: a small extra horizontal drift over the pan, signed per
       // card so nearer cards slide a touch differently — depth without breaking
@@ -181,8 +240,7 @@ export function buildReelScene(
       // card center crosses ~viewport-center: its on-track center is leftVw, the
       // pan brings center-of-viewport (50vw) to it at progress
       // ~ (leftVw - 50) / (TRACK_VW - 100), clamped to [0,1]. Card 1 (already in
-      // frame at rest) waves in right at the very start.
-      const span = TRACK_VW - 100;
+      // frame at rest) waves in right at the very start. (`span` hoisted above.)
       const enterAt = Math.min(
         Math.max((def.leftVw - 50) / span, 0),
         LIFT_AT - 0.06,
@@ -340,11 +398,16 @@ export function applyReelStaticState(root: HTMLElement): () => void {
     }
   }
 
+  // Reduced motion / mobile: skip the scrubbed momentum lean but KEEP the resting
+  // RIGHT-LEAN tilt (a calm static read, not a flat upright grid). Each card holds
+  // its own `rotateDeg`; unmatched nodes fall back to 0.
+  const byId = new Map<string, ReelCardDef>(REEL_CARDS.map((c) => [c.id, c]));
   cards.forEach((el) => {
+    const def = byId.get(el.dataset.cardId ?? "");
     gsap.set(el, {
       autoAlpha: 1,
       scale: 1,
-      rotation: 0,
+      rotation: def?.rotateDeg ?? 0,
       xPercent: 0,
       yPercent: 0,
       clearProps: "willChange",

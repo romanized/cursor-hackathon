@@ -231,10 +231,26 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
       ref={scopeRef}
       aria-label={META?.name ?? "Inside the studio"}
       className={cn(
-        "relative bg-bg pb-[clamp(4rem,8vh,7rem)] pt-[clamp(2.5rem,6vh,4.5rem)]",
+        // TRANSITION-AREA BACKGROUND — not a flat #050505 void. A subtle ELEVATED
+        // DARK GRADIENT carries the seam from the hero's Studio Black into "the
+        // studio": top stays at the hero's #050505 and fades down through a faintly
+        // lifted warm-dark (#0a0606 → #0d0a0a, the dashboard's near-black tone) so
+        // the handoff reads as a gentle descent into the product rather than a flat
+        // wall. There is NO hard line — the rising panel's rounded-top red edge is
+        // the only divider; the gradient just warms the surround so the teaser lifts
+        // off it even better. Stays SUBTLE + on-aesthetic.
+        "relative bg-[linear-gradient(180deg,#050505_0%,#070606_34%,#0a0807_68%,#0d0a0a_100%)] pb-[clamp(4rem,8vh,7rem)] pt-[clamp(2.5rem,6vh,4.5rem)]",
         className,
       )}
     >
+      {/* A very faint RADIAL WARMTH centred behind/under the rising panel so the
+          surround glows a touch toward the dashboard's warm-dark rather than reading
+          as pure black — pure ambience, decorative, transform/opacity-free. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 top-1/3 bg-[radial-gradient(60%_70%_at_50%_85%,rgba(40,28,26,0.45),transparent_70%)]"
+      />
+
       {/*
         FIXED TEASER SLIP — the signature. position:fixed, viewport-bottom, z-30
         (below the z-50 nav, above the hero canvas). Present + fully visible from
@@ -279,7 +295,10 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
           data-sneak="panel"
           style={DEMO_VARS}
           className={cn(
-            "hookm-demo relative mx-auto w-full max-w-7xl will-change-transform",
+            // Slightly NARROWER overall (max-w-6xl vs the former 7xl) so the demo
+            // reads tighter and a touch less wide while the sidebar + 3-up format
+            // grid stay perfectly legible.
+            "hookm-demo relative mx-auto w-full max-w-6xl will-change-transform",
             bricolage.variable,
             instrument.variable,
           )}
@@ -541,19 +560,25 @@ function DemoStepStrip() {
 
 /**
  * MAIN WORK AREA — the Step-01 picker: an overline + heading with an italic-serif
- * RED accent word (the dashboard's `.accent`), a Video/Slideshow toggle (Video
- * active = red pill), "6 formats available", and the grid of FORMAT CARDS.
+ * RED accent word (the dashboard's `.accent`), a single-line supporting description,
+ * and the grid of FORMAT CARDS.
+ *
+ * TIGHTER, NARROWER HEADER: the Video/Slideshow toggle and the "6 formats available"
+ * count are gone — the picker reads cleaner without them. The description now sits on
+ * ONE LINE, and the vertical rhythm is pulled in (smaller header gap + tighter
+ * outer gap + reduced top padding) so the cards start HIGHER and the panel is less
+ * tall, while the sidebar + 3-up grid stay readable.
  */
 function DemoMain() {
   return (
-    <div className="relative flex flex-col gap-6 px-5 py-7 sm:px-9 sm:py-9">
+    <div className="relative flex flex-col gap-5 px-5 pb-7 pt-5 sm:px-9 sm:pb-8 sm:pt-6">
       {/* Ambient red wash behind the picker (the dashboard's `.ambient-red`). */}
       <span
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(239,68,68,0.10),transparent_70%)]"
       />
 
-      <header data-sneak="reveal" className="relative flex flex-col gap-3">
+      <header data-sneak="reveal" className="relative flex flex-col gap-2">
         <span className="font-[family-name:var(--hk-font-sans)] text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--hk-accent)]">
           Template
         </span>
@@ -563,32 +588,18 @@ function DemoMain() {
             hook format.
           </span>
         </h3>
-        <p className="max-w-xl font-[family-name:var(--hk-font-sans)] text-sm leading-relaxed text-[var(--hk-muted)]">
+        {/* ONE-LINE supporting copy: smaller text + nowrap (with horizontal
+            scroll-safety) keeps it on a single line so the header takes less
+            vertical height; it wraps only on the narrowest screens. */}
+        <p className="max-w-full whitespace-normal font-[family-name:var(--hk-font-sans)] text-xs leading-snug text-[var(--hk-muted)] sm:whitespace-nowrap sm:text-[13px] lg:text-xs">
           The format decides the visual language of the final video. You can change
           it any time before the script is locked.
         </p>
       </header>
 
-      {/* Video / Slideshow toggle + formats-available count. */}
-      <div
-        data-sneak="reveal"
-        className="relative flex items-center justify-between"
-      >
-        <div className="inline-flex rounded-full border border-[var(--hk-border)] bg-[var(--hk-surface)] p-1 text-sm">
-          <span className="rounded-full bg-[var(--hk-accent)] px-4 py-2 font-[family-name:var(--hk-font-sans)] text-white">
-            Video
-          </span>
-          <span className="rounded-full px-4 py-2 font-[family-name:var(--hk-font-sans)] text-[var(--hk-muted)]">
-            Slideshow
-          </span>
-        </div>
-        <span className="font-[family-name:var(--hk-font-sans)] text-xs text-[var(--hk-muted)]">
-          6 formats available
-        </span>
-      </div>
-
-      {/* FORMAT CARD GRID — roomier gutters so the wider panel gives each card
-          breathing space for its preview image + label + description. */}
+      {/* FORMAT CARD GRID — roomier gutters so each card keeps breathing space for
+          its preview image + label + description. Sits directly under the tightened
+          header so the cards start higher. */}
       <div className="relative grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {FORMATS.map((f) => (
           <FormatCard key={f.name} format={f} />

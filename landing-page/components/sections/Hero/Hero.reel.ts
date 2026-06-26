@@ -19,7 +19,18 @@
  *   height, since the track is full-height).
  * - `topVh` — the card's CENTER vertically, in vh. The five values ALTERNATE
  *   top/bottom so the cards trace a zig-zag ribbon as they pan past.
- * - `scale` / `rotateDeg` — resting depth + a tasteful static tilt.
+ * - `scale` — resting depth.
+ * - `rotateDeg` — the card's RESTING tilt, deg. The baseline now LEANS RIGHT
+ *   (positive ~ +4..+7) with slight per-card variation — the whole reel reads as
+ *   "in motion to the right" at rest. `Hero.animation.ts` lays a SUBTLE scrubbed
+ *   rotation tween ON TOP of this resting tilt (it is never a static-only value
+ *   anymore — see `leanDeg`).
+ * - `leanDeg` — the EXTRA rotation (deg) added as the card crosses viewport
+ *   center, a momentum "lean into the travel direction" (cards travel leftward as
+ *   the track pans, so a small positive nudge reads as leaning further with the
+ *   motion). Applied by `Hero.animation.ts` as a transform-only scrubbed tween:
+ *   rotateDeg -> rotateDeg + leanDeg at center, then eased back. Reverses on
+ *   scroll-up; skipped entirely under reduced motion (resting tilt only).
  * - `driftVw` — a small extra horizontal parallax drift (vw) applied as the pan
  *   runs, so nearer cards (bigger scale) slide a touch faster than farther ones —
  *   depth without breaking the 1:1 scroll feel.
@@ -63,8 +74,18 @@ export interface ReelCardDef {
   readonly topVh: number;
   /** Resting scale (depth). */
   readonly scale: number;
-  /** Resting tilt, deg (static — never tweened on scrub). */
+  /**
+   * Resting tilt, deg. Baseline LEANS RIGHT (positive ~ +4..+7) with slight
+   * per-card variation. `Hero.animation.ts` adds a subtle scrubbed lean on top.
+   */
   readonly rotateDeg: number;
+  /**
+   * Extra rotation (deg) added as the card crosses viewport center — a momentum
+   * "lean into the travel direction" (cards travel leftward; a small positive
+   * nudge leans further with the motion). Transform-only scrubbed tween in
+   * `Hero.animation.ts`; reverses on scroll-up; skipped under reduced motion.
+   */
+  readonly leanDeg: number;
   /** Extra horizontal parallax drift (vw) over the pan; signed for depth. */
   readonly driftVw: number;
 }
@@ -109,6 +130,14 @@ export function posterSrc(video: ReelVideo): string {
  * screen (bottom edge at AR 1.6 lands ~86vh <= 93). The vertical clamp in
  * `Hero.animation.ts` then guarantees [7vh, 93vh] on any aspect ratio. `driftVw`
  * adds depth parallax.
+ *
+ * RESTING LEAN (the new baseline): every card now RESTS rotated to the RIGHT
+ * (positive tilt ~ +4..+7) with slight per-card variation, so the reel reads as
+ * "in motion to the right" even at rest. `leanDeg` is the SUBTLE extra rotation
+ * each card picks up as it crosses viewport center — a momentum lean in the
+ * travel direction (transform-only, eased back, reverses on scroll-up; see
+ * `Hero.animation.ts`). leftVw / topVh / scale / driftVw are UNCHANGED — this
+ * change is rotation-only, never repositioning.
  */
 export const REEL_CARDS: readonly ReelCardDef[] = [
   {
@@ -120,7 +149,8 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     leftVw: 22,
     topVh: 24,
     scale: 1.0,
-    rotateDeg: -3,
+    rotateDeg: 5,
+    leanDeg: 3,
     driftVw: -2.5,
   },
   {
@@ -132,7 +162,8 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     leftVw: 70,
     topVh: 73,
     scale: 0.95,
-    rotateDeg: 2.5,
+    rotateDeg: 6.5,
+    leanDeg: 2.5,
     driftVw: 1.5,
   },
   {
@@ -144,7 +175,8 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     leftVw: 118,
     topVh: 23,
     scale: 1.04,
-    rotateDeg: 0,
+    rotateDeg: 4,
+    leanDeg: 3.5,
     driftVw: -3,
   },
   {
@@ -156,7 +188,8 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     leftVw: 166,
     topVh: 73,
     scale: 0.95,
-    rotateDeg: -2.5,
+    rotateDeg: 6,
+    leanDeg: 2.5,
     driftVw: 1.5,
   },
   {
@@ -167,7 +200,8 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     leftVw: 210,
     topVh: 24,
     scale: 1.0,
-    rotateDeg: 3,
+    rotateDeg: 5,
+    leanDeg: 3,
     driftVw: -2,
   },
 ] as const;
