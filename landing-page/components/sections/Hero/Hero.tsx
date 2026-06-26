@@ -8,7 +8,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { SCROLL_MARKERS } from "@/lib/gsap/scrollTrigger";
 import { Button, VideoCard } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
-import { SITE } from "@/lib/constants/site";
+import { SITE, NAV_ITEMS, APP_LOGIN_URL } from "@/lib/constants/site";
 import type { SectionProps } from "@/types";
 import { REEL_CARDS, TRACK_VW, WIDTH_VW, videoSrc, posterSrc } from "./Hero.reel";
 import { buildReelScene, applyReelStaticState, REEL } from "./Hero.animation";
@@ -308,27 +308,21 @@ function HeroBlock() {
         data-hero-reveal
         className="gsap-hidden pointer-events-auto mt-9 flex flex-col items-center gap-3 sm:flex-row"
       >
-        <Button
-          size="lg"
-          variant="primary"
-          // REFINED LIME CTA — toned down from the full neon-lime fill to fit Studio
-          // Black: a dark button with a lime outline + lime label + a subtle lime
-          // glow. Still unmistakably the primary action and the page's one bold lime
-          // moment (alongside the progress hairline), just premium instead of glaring.
-          // These overrides win over the variant's `bg-accent text-on-accent` via
-          // tailwind-merge. Lime (#c6f24e) text on surface-2 (#16161a) keeps strong
-          // contrast.
-          className="border border-accent/40 bg-surface-2/60 text-accent shadow-[0_0_28px_-10px_rgba(198,242,78,0.45)] transition-all hover:border-accent/60 hover:bg-surface-2 hover:shadow-[0_0_32px_-8px_rgba(198,242,78,0.55)]"
-          onClick={() => scrollToAnchor("#cta")}
+        {/* Primary CTA → the live app login. Rendered as an anchor (not a scroll
+            button) since it leaves the page. Keeps the refined lime-outline + glow
+            treatment — the page's one bold lime moment. */}
+        <a
+          href={APP_LOGIN_URL}
+          className="inline-flex h-14 select-none items-center justify-center gap-2 rounded-pill border border-accent/40 bg-surface-2/60 px-8 font-sans text-base font-medium text-accent shadow-[0_0_28px_-10px_rgba(198,242,78,0.45)] transition-all duration-200 ease-[var(--ease-expo)] hover:border-accent/60 hover:bg-surface-2 hover:shadow-[0_0_32px_-8px_rgba(198,242,78,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
           Generate my first ad
-        </Button>
+        </a>
         <Button
           size="lg"
           variant="ghost"
-          onClick={() => scrollToAnchor("#how-it-works")}
+          onClick={() => scrollToAnchor("#why")}
         >
-          See how it works
+          See why
         </Button>
       </div>
     </div>
@@ -412,12 +406,6 @@ function HeadlineSwap() {
  * block's primary CTA ("Generate my first ad") + the progress hairline. Sits above
  * the pinned canvas (z-50) so the pin never clips it. Anchor links go through Lenis.
  */
-const NAV_LINKS = [
-  { label: "How it works", href: "#how-it-works" },
-  { label: "Features", href: "#features" },
-  { label: "The result", href: "#result" },
-] as const;
-
 function HeroNav() {
   const scrollToAnchor = useScrollToAnchor();
   return (
@@ -443,7 +431,7 @@ function HeroNav() {
             way plain justify-between did. Quiet text, hover lifts to fg. Hidden on
             narrow screens where the pill would crowd; the CTA stays. */}
         <ul className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-7 font-sans text-sm text-muted md:flex">
-          {NAV_LINKS.map((link) => (
+          {NAV_ITEMS.map((link) => (
             <li key={link.href}>
               <a
                 href={link.href}
@@ -459,15 +447,14 @@ function HeroNav() {
           ))}
         </ul>
 
-        {/* Muted ghost CTA — no lime; the bold lime lives only on the hero CTA. */}
-        <Button
-          size="md"
-          variant="ghost"
-          className="shrink-0"
-          onClick={() => scrollToAnchor("#cta")}
+        {/* Muted ghost CTA → the live app login. Anchor styled like the ghost button
+            (no lime; the bold lime lives only on the hero CTA). */}
+        <a
+          href={APP_LOGIN_URL}
+          className="inline-flex h-11 shrink-0 select-none items-center justify-center gap-2 rounded-pill border border-hairline-strong bg-surface-2/40 px-5 font-sans text-sm font-medium text-fg transition-colors duration-200 ease-[var(--ease-expo)] hover:border-fg/25 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
           Start rendering
-        </Button>
+        </a>
       </nav>
     </header>
   );

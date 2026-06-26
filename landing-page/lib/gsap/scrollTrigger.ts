@@ -12,8 +12,13 @@ type ScrollTriggerVars = ScrollTrigger.Vars;
  * hand-writing `start`/`end` per scene) keeps the scroll choreography coherent.
  */
 
-/** Dev-only marker toggle. Tree-shaken to `false` in production builds. */
-export const SCROLL_MARKERS = process.env.NODE_ENV === "development";
+/**
+ * ScrollTrigger debug markers — kept OFF everywhere (including dev) so the
+ * on-screen "scroller-start / scroller-end / start / end" overlay never shows.
+ * Flip to `process.env.NODE_ENV === "development"` locally if you need to debug a
+ * trigger's start/end bounds.
+ */
+export const SCROLL_MARKERS = false;
 
 /**
  * Reveal scenes: discrete entry, played once, slightly inside the viewport.

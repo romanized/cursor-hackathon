@@ -11,17 +11,9 @@
  * The canonical, ORDERED set of section ids. This union is load-bearing: it is
  * the registry key in `app/page.tsx` (`Record<SectionId, …>` makes the island
  * map exhaustive) and every section's DOM `id` / anchor target. Order mirrors
- * scroll order: hero -> sneak-peek -> how-it-works -> result -> features -> cta
- * -> footer.
+ * scroll order: hero -> sneak-peek -> why -> footer.
  */
-export type SectionId =
-  | "hero"
-  | "sneak-peek"
-  | "how-it-works"
-  | "result"
-  | "features"
-  | "cta"
-  | "footer";
+export type SectionId = "hero" | "sneak-peek" | "why" | "footer";
 
 /**
  * One entry in the section registry (`SECTIONS`). `eyebrow` is the small mono

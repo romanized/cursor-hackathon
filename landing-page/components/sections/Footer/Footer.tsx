@@ -4,60 +4,16 @@ import { useRef } from "react";
 import type { ComponentType, SVGProps } from "react";
 
 import { cn } from "@/lib/utils/cn";
-import { SITE } from "@/lib/constants/site";
+import { SITE, APP_LOGIN_URL } from "@/lib/constants/site";
 import type { SectionProps } from "@/types";
 import { useScrollScene } from "@/hooks/useScrollScene";
-import { Container, Timecode } from "@/components/ui";
+import { Container } from "@/components/ui";
 
 import { buildFooterScene } from "./Footer.animation";
 
 /* -------------------------------------------------------------------------- */
 /*  Footer-local content                                                      */
-/*  Footer-only structure lives here (not in the site-wide registry) so a     */
-/*  redesign of this section stays self-contained.                            */
 /* -------------------------------------------------------------------------- */
-
-interface FooterLink {
-  readonly label: string;
-  readonly href: string;
-}
-
-interface FooterColumn {
-  readonly heading: string;
-  readonly links: readonly FooterLink[];
-}
-
-const FOOTER_COLUMNS: readonly FooterColumn[] = [
-  {
-    heading: "Product",
-    links: [
-      { label: "How it works", href: "#how-it-works" },
-      { label: "The result", href: "#result" },
-      { label: "Features", href: "#features" },
-      { label: "Pricing", href: "#cta" },
-      { label: "Changelog", href: "#cta" },
-    ],
-  },
-  {
-    heading: "Company",
-    links: [
-      { label: "About", href: "#" },
-      { label: "Careers", href: "#" },
-      { label: "Blog", href: "#" },
-      { label: "Press kit", href: "#" },
-      { label: "Contact", href: "#" },
-    ],
-  },
-  {
-    heading: "Legal",
-    links: [
-      { label: "Privacy", href: "#" },
-      { label: "Terms", href: "#" },
-      { label: "Cookie policy", href: "#" },
-      { label: "Content guidelines", href: "#" },
-    ],
-  },
-] as const;
 
 interface SocialLink {
   readonly label: string;
@@ -134,14 +90,17 @@ const BUILD_VERSION = "v1.0.0";
 const BUILD_REGION = "iad1";
 
 /* -------------------------------------------------------------------------- */
-/*  Footer                                                                    */
+/*  Footer — a render-suite "sign-off", not a corporate link farm.            */
 /* -------------------------------------------------------------------------- */
 
 export function Footer({ id, className }: SectionProps) {
   const scopeRef = useRef<HTMLElement>(null);
   const year = 2026;
 
-  useScrollScene(scopeRef, (tl) => buildFooterScene(tl));
+  useScrollScene(scopeRef, (tl) => {
+    const root = scopeRef.current;
+    if (root) buildFooterScene(tl, root);
+  });
 
   return (
     <footer
@@ -149,79 +108,76 @@ export function Footer({ id, className }: SectionProps) {
       id={id}
       aria-label="Site footer"
       className={cn(
-        "relative border-t border-hairline bg-bg pt-20 pb-12 md:pt-28",
+        "relative overflow-hidden border-t border-hairline bg-bg pt-section pb-12",
         className,
       )}
     >
-      <Container>
-        <div className="grid grid-cols-1 gap-14 lg:grid-cols-[1.4fr_1fr] lg:gap-12">
-          {/* Brand block ------------------------------------------------- */}
-          <div data-footer-brand className="gsap-hidden max-w-sm">
-            <a
-              href="#hero"
-              className="inline-flex items-baseline gap-2"
-              aria-label={`${SITE.name} — back to top`}
+      {/* Oversized wordmark watermark bleeding off the bottom — the "sign-off". */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -bottom-[0.18em] left-1/2 -translate-x-1/2 select-none whitespace-nowrap font-sans text-[22vw] font-semibold leading-none tracking-tighter text-fg/[0.035]"
+      >
+        {SITE.name}
+      </span>
+
+      <Container className="relative">
+        {/* Big closing line + CTA ------------------------------------------ */}
+        <div className="flex flex-col items-start gap-10 border-b border-hairline pb-14 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <p
+              data-reveal
+              className="font-mono text-[0.6875rem] uppercase tracking-[0.22em] text-accent/80"
             >
-              <span className="font-sans text-2xl font-semibold tracking-tight text-fg">
-                {SITE.name}
-              </span>
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 translate-y-[-0.1em] rounded-pill bg-fg/30"
-              />
-            </a>
-            <p className="mt-5 max-w-[42ch] text-sm leading-relaxed text-muted">
-              {SITE.tagline} Drop in a product, get a ready-to-post hook ad —
-              scripted, cast, and rendered while you watch.
+              Render engine online
             </p>
-            <div className="mt-7 flex items-center gap-3">
-              <Timecode chip>{SITE.twitter}</Timecode>
-              <Timecode>Render-ready in minutes</Timecode>
-            </div>
+            <h2
+              data-reveal
+              className="mt-5 text-balance font-sans text-[clamp(2rem,5vw,3.75rem)] font-medium leading-[0.98] tracking-tighter text-fg"
+            >
+              Your next viral ad is{" "}
+              <span className="text-muted">one link away.</span>
+            </h2>
           </div>
 
-          {/* Nav columns ------------------------------------------------- */}
-          <nav
-            aria-label="Footer"
-            className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3"
+          <a
+            data-reveal
+            href={APP_LOGIN_URL}
+            className={cn(
+              "inline-flex h-14 shrink-0 select-none items-center justify-center gap-2 rounded-pill px-8",
+              "border border-accent/40 bg-surface-2/60 font-sans text-base font-medium text-accent",
+              "shadow-[0_0_28px_-10px_rgba(198,242,78,0.45)] transition-all duration-200 ease-[var(--ease-expo)]",
+              "hover:border-accent/60 hover:bg-surface-2 hover:shadow-[0_0_32px_-8px_rgba(198,242,78,0.55)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+            )}
           >
-            {FOOTER_COLUMNS.map((column) => (
-              <div key={column.heading} data-footer-col className="gsap-hidden">
-                <h2 className="font-mono text-[0.6875rem] uppercase tracking-[0.22em] text-muted">
-                  {column.heading}
-                </h2>
-                <ul className="mt-5 space-y-3.5">
-                  {column.links.map((link) => (
-                    <li key={link.label}>
-                      <a
-                        href={link.href}
-                        className="text-sm text-fg/80 transition-colors duration-200 ease-[var(--ease-expo)] hover:text-fg"
-                      >
-                        {link.label}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </nav>
+            Start rendering
+          </a>
         </div>
 
-        {/* Baseline: build line + socials + copyright ------------------- */}
+        {/* Baseline: wordmark + status + socials + build ------------------- */}
         <div
-          data-footer-baseline
-          className="gsap-hidden mt-20 flex flex-col gap-6 border-t border-hairline pt-8 md:mt-24 md:flex-row md:items-center md:justify-between"
+          data-reveal
+          className="mt-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between"
         >
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-muted">
-            <span>
-              © {year} {SITE.name} Labs
-            </span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <a
+              href="#hero"
+              className="inline-flex items-baseline gap-1.5 font-sans text-lg font-semibold tracking-tight text-fg"
+              aria-label={`${SITE.name} — back to top`}
+            >
+              {SITE.name}
+              <span aria-hidden className="text-accent">
+                .
+              </span>
+            </a>
             <span aria-hidden className="h-3 w-px bg-hairline-strong" />
-            <span>
-              Build {BUILD_VERSION} · {BUILD_REGION}
+            <span className="inline-flex items-center gap-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-muted">
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_6px_1px_rgba(198,242,78,0.5)]"
+              />
+              All systems operational
             </span>
-            <span aria-hidden className="h-3 w-px bg-hairline-strong" />
-            <span>All systems operational</span>
           </div>
 
           <ul className="flex items-center gap-2.5">
@@ -244,6 +200,22 @@ export function Footer({ id, className }: SectionProps) {
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* Fine print ------------------------------------------------------ */}
+        <div
+          data-reveal
+          className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-muted/70"
+        >
+          <span>
+            © {year} {SITE.name} Labs
+          </span>
+          <span aria-hidden className="h-3 w-px bg-hairline-strong" />
+          <span>
+            Build {BUILD_VERSION} · {BUILD_REGION}
+          </span>
+          <span aria-hidden className="h-3 w-px bg-hairline-strong" />
+          <span>{SITE.twitter}</span>
         </div>
       </Container>
     </footer>

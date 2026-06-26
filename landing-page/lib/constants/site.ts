@@ -11,6 +11,14 @@ import type { NavItem, SectionMeta } from "@/types";
 /** Canonical production origin. Used for `metadataBase` + absolute OG URLs. */
 export const SITE_URL = "https://hookline.ai";
 
+/**
+ * The live app's login entry. Every primary CTA ("Generate my first ad",
+ * "Start rendering", etc.) points here — the landing page hands off to the
+ * deployed dashboard. One constant so the URL lives in a single place.
+ */
+export const APP_LOGIN_URL =
+  "https://app-cursor-hackathon.exportdefau.lt/login";
+
 export const SITE = {
   name: "Hookline",
   /** Title shown in the browser tab / used as the metadata template base. */
@@ -24,15 +32,14 @@ export const SITE = {
 } as const;
 
 /**
- * Floating-nav links. Each `href` is an in-page anchor that resolves to a
- * section's DOM `id` (see `SECTIONS`). Lenis/ScrollToPlugin can smooth-scroll
- * to these targets.
+ * Floating-nav links. The page is intentionally SHORT — hero, the dashboard
+ * sneak-peek, the "why" pitch, footer — so the nav is just the in-page anchors
+ * that exist plus the app hand-off. `#why` resolves to the "Why Hookline" section;
+ * the right-side "Start rendering" CTA goes to {@link APP_LOGIN_URL}, not an anchor.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
-  { label: "How it works", href: "#how-it-works" },
-  { label: "Result", href: "#result" },
-  { label: "Features", href: "#features" },
-  { label: "Start", href: "#cta" },
+  { label: "The studio", href: "#sneak-peek" },
+  { label: "Why Hookline", href: "#why" },
 ] as const;
 
 /**
@@ -40,15 +47,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
  * which also mirrors scroll order — important so ScrollTrigger instances are
  * created in page order (correct pin-spacing + refresh behavior).
  *
- * Order is load-bearing: hero -> sneak-peek -> how-it-works -> result -> features
- * -> cta -> footer.
+ * Order is load-bearing: hero -> sneak-peek -> why -> footer. (The old
+ * how-it-works / result / features / cta sections were removed — they rendered
+ * empty after the dashboard demo and the page is now a tight hero -> studio ->
+ * why -> footer flow.)
  */
 export const SECTIONS: readonly SectionMeta[] = [
   { id: "hero", name: "Hero", eyebrow: "Live render" },
   { id: "sneak-peek", name: "Sneak peek", eyebrow: "Inside the studio" },
-  { id: "how-it-works", name: "How it works", eyebrow: "The flow" },
-  { id: "result", name: "The result", eyebrow: "The output" },
-  { id: "features", name: "Features", eyebrow: "Inside the suite" },
-  { id: "cta", name: "Get started", eyebrow: "Your first render" },
+  { id: "why", name: "Why Hookline", eyebrow: "Why Hookline" },
   { id: "footer", name: "Footer" },
 ] as const;
