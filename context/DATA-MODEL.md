@@ -26,13 +26,13 @@ anchored to **1 credit ≈ $0.01** of vendor spend:
 | Gemini brief inference | 2 | `brief_inference` |
 | Gemini script + beats | 8 | `script` |
 | Gemini image (per beat) | 15 | `image:<idx>` |
-| ElevenLabs voiceover | 40 | `voiceover` |
+| ElevenLabs voiceover (per beat) | 10 | `voiceover:<idx>` |
 | Replicate Kling 2.1 clip | 40 | `clip:replicate-kling` |
 | Replicate LTX-Video clip | 10 | `clip:replicate-ltx` |
 | Google Veo 3 Fast clip | 200 | `clip:google-veo` |
 
 A typical 5-beat Kling video burns:
-`5 (scrape) + 2 (brief) + 8 (script) + 75 (5×img) + 40 (voice) + 200 (5×clip) ≈ 330 credits`.
+`5 (scrape) + 2 (brief) + 8 (script) + 75 (5×img) + 50 (5×voice) + 200 (5×clip) ≈ 340 credits`.
 Signup grant = **1000 credits** (see `20260626130000_credit_topup.sql`).
 
 Legacy cost shape — `hook = 1`, `full = 3` — has been removed.

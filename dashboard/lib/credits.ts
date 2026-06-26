@@ -10,7 +10,7 @@ export const COST = {
   briefInference:  2,    // Gemini 2.5 Flash, ~200-tok JSON output
   script:          8,    // Gemini 2.5 Flash, ~600-tok structured script
   imagePerBeat:   15,    // Gemini 2.5 Flash Image (Nano-banana), ~$0.04/img
-  voiceover:      40,    // ElevenLabs Turbo v2.5, ~$0.30 per typical script
+  voiceover:      10,    // ElevenLabs Turbo v2.5, charged PER BEAT (~$0.06 each)
   clipKling:      40,    // Replicate kwaivgi/kling-v2.1 standard, $0.25/clip
   clipLTX:        10,    // Replicate lightricks/ltx-video, $0.05/clip
   clipVeo:       200,    // Google AI Studio Veo 3 Fast, ~$1.60/clip

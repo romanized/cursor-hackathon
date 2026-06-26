@@ -16,10 +16,10 @@ const STYLE: Record<string, string> = {
     "Vibrant 2D cartoon illustration in a flat, bold yellow-skinned suburban-comedy animation style (generic, no real character). Thick black outlines, flat saturated colors, exaggerated comic proportions, dynamic comic-panel composition. Vertical 9:16 framing.",
   cgi_3d:
     "Photoreal 3D CGI character holding and showcasing the product, soft global illumination, shallow depth of field, cinema-quality render. Vertical 9:16 framing.",
-  animated_body_part:
-    "Stylised animated close-up of a cartoon hand or eye interacting with the product, slightly quirky TikTok-hook aesthetic. PG-rated, friendly, vertical 9:16 framing.",
   ai_streamer_clip:
-    "Stylised streamer-style webcam capture with a generic on-screen overlay, neon RGB room lighting, subtle chromatic aberration. Vertical 9:16 framing.",
+    "Stylised gaming streamer webcam capture of a generic young creator on stream, headset on, mid-reaction. Behind them: a neon RGB lit bedroom-studio with LED strips, plants, monitor glow. Faux on-screen overlay (subscribe banner, donation alert) shown around the edges. Subtle chromatic aberration, gentle motion blur, high-end webcam quality. Vertical 9:16 framing. PG-rated, no real-person likeness.",
+  pibble_dog:
+    "Soft 3D Pixar-style render of a friendly cartoon pitbull (pibble) mascot with a big blocky head, expressive eyes, and a goofy tongue-out smile. Sitting or standing upright, holding and proudly showing the product. Warm cinematic lighting, soft global illumination, shallow depth of field, clean pastel studio backdrop. Hyperdetailed, plush-toy quality. Vertical 9:16 framing. PG-rated, wholesome, never aggressive.",
 };
 
 // Last-resort fallback when the styled prompt is blocked. Generic product

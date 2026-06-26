@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
+import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -47,71 +48,121 @@ export async function assembleFinal(projectId: string) {
   const { supabase, user } = await requireUser();
   const svc = createService();
 
-  const [{ data: clips }, { data: voice }] = await Promise.all([
+  const [{ data: project }, { data: clips }, { data: voices }] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("captions")
+      .eq("id", projectId)
+      .single(),
     supabase
       .from("assets")
       .select("id, beat_id, url, storage_path")
       .eq("project_id", projectId)
       .eq("kind", "clip")
       .eq("status", "ready")
-      .order("created_at"),
+      .not("beat_id", "is", null),
     supabase
       .from("assets")
-      .select("id, url, storage_path")
+      .select("id, beat_id, url, storage_path")
       .eq("project_id", projectId)
       .eq("kind", "voiceover")
       .eq("status", "ready")
-      .maybeSingle(),
+      .not("beat_id", "is", null),
   ]);
 
   if (!clips?.length) throw new Error("no clips ready");
-  if (!voice?.storage_path) throw new Error("no voiceover ready");
+  if (!voices?.length) throw new Error("no per-beat voiceover — re-render voice");
 
-  // Stable beat order: rejoin to beats.idx (clips arrive in created_at order
-  // which usually matches, but failed/retried beats can skew it).
-  const beatIds = clips
-    .map((c) => c.beat_id)
-    .filter((id): id is string => Boolean(id));
+  // Pair each clip with its beat's voice. Beats keyed by id; output is in
+  // beats.idx order so the final timeline matches the script.
+  const beatIds = [
+    ...new Set(clips.map((c) => c.beat_id!).concat(voices.map((v) => v.beat_id!))),
+  ];
   const { data: beats } = await supabase
     .from("beats")
-    .select("id, idx")
+    .select("id, idx, text")
     .eq("project_id", projectId)
     .in("id", beatIds);
-  const beatIdx = new Map((beats ?? []).map((b) => [b.id, b.idx] as const));
-  const orderedClips = [...clips].sort((a, b) => {
-    const ai = a.beat_id ? beatIdx.get(a.beat_id) ?? 999 : 999;
-    const bi = b.beat_id ? beatIdx.get(b.beat_id) ?? 999 : 999;
-    return ai - bi;
-  });
+  const beatById = new Map((beats ?? []).map((b) => [b.id, b] as const));
+  const voiceByBeat = new Map(voices.map((v) => [v.beat_id!, v] as const));
+
+  type Pair = {
+    beatId: string;
+    idx: number;
+    text: string | null;
+    clip: (typeof clips)[number];
+    voice: (typeof voices)[number];
+  };
+  const pairs: Pair[] = clips
+    .map((c): Pair | null => {
+      const v = voiceByBeat.get(c.beat_id!);
+      const b = beatById.get(c.beat_id!);
+      if (!v || !b) return null;
+      return { beatId: c.beat_id!, idx: b.idx, text: b.text, clip: c, voice: v };
+    })
+    .filter((p): p is Pair => p !== null)
+    .sort((a, b) => a.idx - b.idx);
+
+  if (!pairs.length) {
+    throw new Error("no clip/voice pairs — every beat needs both a clip and a voiceover");
+  }
 
   const tmpDir = await fs.mkdtemp(
     path.join(os.tmpdir(), `hookm-${projectId}-`)
   );
-  console.log("[assemble] tmp", tmpDir, "clips", orderedClips.length);
+  console.log("[assemble] tmp", tmpDir, "pairs", pairs.length);
 
   try {
-    // Download all assets in parallel.
-    const clipPaths = await Promise.all(
-      orderedClips.map(async (clip, i) => {
-        if (!clip.storage_path)
-          throw new Error(`clip ${clip.id} has no storage_path`);
-        const ext = path.extname(clip.storage_path).toLowerCase() || ".mp4";
-        const dest = path.join(
-          tmpDir,
-          `clip${String(i).padStart(2, "0")}${ext}`
-        );
-        await downloadTo(svc, clip.storage_path, dest);
-        return dest;
-      })
+    // Download all clip + voice files in parallel.
+    const downloads = await Promise.all(
+      pairs.map(async (p, i) => {
+        if (!p.clip.storage_path) throw new Error(`clip ${p.clip.id} has no storage_path`);
+        if (!p.voice.storage_path) throw new Error(`voice ${p.voice.id} has no storage_path`);
+        const clipExt = path.extname(p.clip.storage_path).toLowerCase() || ".mp4";
+        const voiceExt = path.extname(p.voice.storage_path).toLowerCase() || ".mp3";
+        const ii = String(i).padStart(2, "0");
+        const clipPath = path.join(tmpDir, `clip${ii}${clipExt}`);
+        const voicePath = path.join(tmpDir, `voice${ii}${voiceExt}`);
+        await Promise.all([
+          downloadTo(svc, p.clip.storage_path, clipPath),
+          downloadTo(svc, p.voice.storage_path, voicePath),
+        ]);
+        return { clipPath, voicePath };
+      }),
     );
-    const voicePath = path.join(
-      tmpDir,
-      `voice${path.extname(voice.storage_path) || ".mp3"}`
+
+    // Probe durations — we need both to compute the setpts stretch ratio.
+    const probed = await Promise.all(
+      downloads.map(async (d) => {
+        const [clipDur, voiceDur] = await Promise.all([
+          probeDuration(d.clipPath).catch(() => STILL_DURATION),
+          probeDuration(d.voicePath),
+        ]);
+        return { ...d, clipDur, voiceDur };
+      }),
     );
-    await downloadTo(svc, voice.storage_path, voicePath);
+
+    // Captions: cumulative offsets per beat, sized to the voice (which now
+    // drives the final timeline).
+    let srtName: string | null = null;
+    if (project?.captions) {
+      const cues: SrtCue[] = [];
+      let cursor = 0;
+      pairs.forEach((p, i) => {
+        const dur = probed[i].voiceDur;
+        const text = p.text?.trim();
+        if (text) cues.push({ start: cursor, end: cursor + dur, text });
+        cursor += dur;
+      });
+      if (cues.length) {
+        srtName = "captions.srt";
+        await fs.writeFile(path.join(tmpDir, srtName), toSrt(cues), "utf8");
+        console.log("[assemble] captions", { cues: cues.length, totalSec: cursor });
+      }
+    }
 
     const outPath = path.join(tmpDir, "final.mp4");
-    await runFfmpeg(buildFfmpegArgs(clipPaths, voicePath, outPath));
+    await runFfmpeg(buildFfmpegArgs(probed, outPath, srtName), tmpDir);
 
     const bytes = await fs.readFile(outPath);
     const remotePath = `${user.id}/${projectId}/final/${randomUUID()}.mp4`;
@@ -141,8 +192,13 @@ export async function assembleFinal(projectId: string) {
       meta: {
         kind: "rendered_mp4",
         bytes: bytes.length,
-        clips: orderedClips.map((c) => ({ id: c.id, url: c.url })),
-        voice: { id: voice.id, url: voice.url },
+        pairs: pairs.map((p, i) => ({
+          beatId: p.beatId,
+          clipId: p.clip.id,
+          voiceId: p.voice.id,
+          clipDur: probed[i].clipDur,
+          voiceDur: probed[i].voiceDur,
+        })),
       } as never,
     };
     const { error } = await supabase.from("assets").insert(finalRow);
@@ -175,32 +231,56 @@ async function downloadTo(
   await fs.writeFile(dest, Buffer.from(await data.arrayBuffer()));
 }
 
+type ProbedPair = {
+  clipPath: string;
+  voicePath: string;
+  clipDur: number;
+  voiceDur: number;
+};
+
 function buildFfmpegArgs(
-  clipPaths: string[],
-  voicePath: string,
-  outPath: string
+  pairs: ProbedPair[],
+  outPath: string,
+  srtName: string | null,
 ): string[] {
   const args: string[] = ["-y"];
 
-  // Inputs: stills get -loop 1 -t N; videos go straight in.
-  clipPaths.forEach((p) => {
-    if (isVideoPath(p)) {
-      args.push("-i", p);
+  // Inputs: for each pair, the clip then the voice. Stills get -loop 1 -t
+  // sized to the voice duration; videos go straight in and we'll setpts them.
+  pairs.forEach((p) => {
+    if (isVideoPath(p.clipPath)) {
+      args.push("-i", p.clipPath);
     } else {
-      args.push("-loop", "1", "-t", String(STILL_DURATION), "-i", p);
+      args.push("-loop", "1", "-t", String(p.voiceDur), "-i", p.clipPath);
     }
+    args.push("-i", p.voicePath);
   });
-  args.push("-i", voicePath);
 
-  // Normalize every clip to 720x1280 + 30fps + same SAR so concat doesn't fight.
-  const filters = clipPaths
-    .map(
-      (_, i) =>
-        `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,format=yuv420p[v${i}]`
-    )
-    .join(";");
-  const concatInputs = clipPaths.map((_, i) => `[v${i}]`).join("");
-  const filterComplex = `${filters};${concatInputs}concat=n=${clipPaths.length}:v=1:a=0[outv]`;
+  // Per pair: scale+pad clip to 720x1280, then stretch with setpts so the
+  // clip's duration matches the voice's. fps=30 last so the timing is exact.
+  const vFilters = pairs.map((p, i) => {
+    const inputIdx = i * 2;
+    // Stills are already sized via `-t voiceDur` on the input — no stretch.
+    // Real videos: setpts=PTS*(voiceDur/clipDur) makes the clip exactly the
+    // length of the per-beat narration, locking lip/beat sync to that voice.
+    const isStill = !isVideoPath(p.clipPath);
+    const ratio = !isStill && p.clipDur > 0.05 ? p.voiceDur / p.clipDur : 1;
+    return `[${inputIdx}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,setpts=PTS*${ratio.toFixed(6)},fps=30,format=yuv420p[v${i}]`;
+  });
+  // Per pair: normalize the voice to stereo 44.1k AAC-friendly source.
+  const aFilters = pairs.map((p, i) => {
+    const audioIdx = i * 2 + 1;
+    return `[${audioIdx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${i}]`;
+  });
+
+  const concatInputs = pairs.map((_, i) => `[v${i}][a${i}]`).join("");
+  // If captions: concat → [cv][outa], then burn subs into [cv] → [outv].
+  // Else: concat straight to [outv][outa].
+  const tail = srtName
+    ? `${concatInputs}concat=n=${pairs.length}:v=1:a=1[cv][outa];[cv]subtitles='${srtName}':force_style='FontName=Arial,Fontsize=34,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00000000&,BorderStyle=1,Outline=5,Shadow=1,Alignment=2,MarginV=180,Spacing=0.4'[outv]`
+    : `${concatInputs}concat=n=${pairs.length}:v=1:a=1[outv][outa]`;
+
+  const filterComplex = `${vFilters.join(";")};${aFilters.join(";")};${tail}`;
 
   args.push(
     "-filter_complex",
@@ -208,7 +288,7 @@ function buildFfmpegArgs(
     "-map",
     "[outv]",
     "-map",
-    `${clipPaths.length}:a`,
+    "[outa]",
     "-c:v",
     "libx264",
     "-preset",
@@ -223,17 +303,17 @@ function buildFfmpegArgs(
     "160k",
     "-movflags",
     "+faststart",
-    "-shortest",
-    outPath
+    outPath,
   );
   return args;
 }
 
-function runFfmpeg(args: string[]): Promise<void> {
+function runFfmpeg(args: string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     console.log("[ffmpeg]", ffmpegInstaller.path, args.join(" "));
     const proc = spawn(ffmpegInstaller.path, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      cwd,
     });
     let stderr = "";
     proc.stderr?.on("data", (d) => {
@@ -245,4 +325,47 @@ function runFfmpeg(args: string[]): Promise<void> {
       else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-800)}`));
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Captions
+
+type SrtCue = { start: number; end: number; text: string };
+
+function probeDuration(file: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffprobeInstaller.path, [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      file,
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let err = "";
+    proc.stdout?.on("data", (d) => { out += d.toString(); });
+    proc.stderr?.on("data", (d) => { err += d.toString(); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`ffprobe exit ${code}: ${err.slice(-400)}`));
+      const n = Number(out.trim());
+      if (!Number.isFinite(n) || n <= 0) return reject(new Error(`ffprobe bad duration: ${out}`));
+      resolve(n);
+    });
+  });
+}
+
+function toSrt(cues: SrtCue[]): string {
+  return cues
+    .map((c, i) => `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${c.text}\n`)
+    .join("\n");
+}
+
+function ts(secs: number): string {
+  const ms = Math.round(secs * 1000);
+  const hh = Math.floor(ms / 3600000);
+  const mm = Math.floor((ms % 3600000) / 60000);
+  const ss = Math.floor((ms % 60000) / 1000);
+  const mss = ms % 1000;
+  const pad = (n: number, w: number) => String(n).padStart(w, "0");
+  return `${pad(hh, 2)}:${pad(mm, 2)}:${pad(ss, 2)},${pad(mss, 3)}`;
 }
