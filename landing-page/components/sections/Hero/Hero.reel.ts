@@ -104,18 +104,21 @@ export function posterSrc(video: ReelVideo): string {
  * start (visible at rest), the rest are spread rightward (48vw center-to-center —
  * tighter than before, but a 13vw card never overlaps its neighbour) so they sweep
  * into the viewport one after another as the track pans. `topVh` ALTERNATES with
- * GENTLE bands — tops ~30-32vh, bottoms ~60vh — so the up/down ribbon still reads
- * clearly while nothing hugs the floor; the vertical clamp in `Hero.animation.ts`
- * then guarantees [7vh, 93vh] on any aspect ratio. `driftVw` adds depth parallax.
+ * bands tuned for a touch MORE vertical separation — tops ~23-24vh, bottoms ~73vh —
+ * so the up/down ribbon reads more clearly while every full frame still stays on
+ * screen (bottom edge at AR 1.6 lands ~86vh <= 93). The vertical clamp in
+ * `Hero.animation.ts` then guarantees [7vh, 93vh] on any aspect ratio. `driftVw`
+ * adds depth parallax.
  */
 export const REEL_CARDS: readonly ReelCardDef[] = [
   {
     id: "c1",
     video: "skeleton_1",
     tick: "9:16",
-    // TOP band, pushed HIGHER — visible at rest near the start of the track.
+    // TOP band, nudged a touch HIGHER (27 -> 24) for more ribbon separation —
+    // visible at rest near the start of the track.
     leftVw: 22,
-    topVh: 27,
+    topVh: 24,
     scale: 1.0,
     rotateDeg: -3,
     driftVw: -2.5,
@@ -124,9 +127,10 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     id: "c2",
     video: "simpson_1",
     tick: "9:16",
-    // LOWER band, pushed further DOWN, drifting toward center. (mixed order)
+    // LOWER band, nudged a touch DOWN (70 -> 73), drifting toward center.
+    // Bottom edge at AR 1.6: 73 + (13*1.3306*0.95*1.6)/2 = 86.1vh <= 93 (no clip).
     leftVw: 70,
-    topVh: 70,
+    topVh: 73,
     scale: 0.95,
     rotateDeg: 2.5,
     driftVw: 1.5,
@@ -135,9 +139,10 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     id: "c3",
     video: "skeleton_2",
     tick: "9:16",
-    // HIGH / center apex of the ribbon, pushed HIGHER. (mixed order)
+    // HIGH / center apex of the ribbon, nudged HIGHER (26 -> 23). Top edge at
+    // AR 1.6: 23 - (13*1.3306*1.04*1.6)/2 = 8.6vh >= 7 (no clip).
     leftVw: 118,
-    topVh: 26,
+    topVh: 23,
     scale: 1.04,
     rotateDeg: 0,
     driftVw: -3,
@@ -146,9 +151,10 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     id: "c4",
     video: "simpson_2",
     tick: "9:16",
-    // LOWER band, pushed further DOWN, toward center (mirror of c2). (mixed order)
+    // LOWER band, nudged a touch DOWN (70 -> 73), toward center (mirror of c2).
+    // Bottom edge at AR 1.6: 73 + (13*1.3306*0.95*1.6)/2 = 86.1vh <= 93 (no clip).
     leftVw: 166,
-    topVh: 70,
+    topVh: 73,
     scale: 0.95,
     rotateDeg: -2.5,
     driftVw: 1.5,
@@ -157,9 +163,9 @@ export const REEL_CARDS: readonly ReelCardDef[] = [
     id: "c5",
     video: "skeleton_3",
     tick: "9:16",
-    // TOP band, pushed HIGHER — sweeps in last (mirror of c1). (mixed order)
+    // TOP band, nudged a touch HIGHER (27 -> 24) — sweeps in last (mirror of c1).
     leftVw: 210,
-    topVh: 27,
+    topVh: 24,
     scale: 1.0,
     rotateDeg: 3,
     driftVw: -2,

@@ -21,9 +21,9 @@ import {
  * The same timeline also drives, on the SAME 0->1 progress:
  *  - a gentle per-card depth parallax (nearer cards drift a touch more) + a
  *    tasteful wave-in as each card sweeps into frame,
- *  - the EVOLVING HEADLINE word-swap (two overflow-clip slab masks that translate
- *    the middle word: "any product" -> "any link" -> the resolved brand line),
- *    spaced out over GENEROUS progress windows so they read cleanly,
+ *  - the EVOLVING HEADLINE word-swap (three overflow-clip slab masks that roll the
+ *    middle word UPWARD and LAND on the last: "any product" -> "any link" ->
+ *    "any idea"), spaced out over GENEROUS progress windows so each reads cleanly,
  *  - the lone lime progress hairline (scaleX 0->1),
  *  - a calm lift handoff at the very end so the canvas clears into SneakPeek.
  *
@@ -195,52 +195,55 @@ export function buildReelScene(
       );
     });
 
-    // --- EVOLVING HEADLINE WORD-SWAP (clean, generous scroll room) ---------
-    // The swap slot stacks two slabs in a fixed-width, overflow-clip box:
-    //   slab A "any product"  (visible at rest, yPercent 0)
+    // --- EVOLVING HEADLINE WORD-SWAP (3 words, PROGRESS + LAND, no revert) --
+    // The swap slot stacks THREE slabs in a min-content, overflow-clip box and
+    // rolls them UPWARD once each — the word advances and SETTLES, never reverting:
+    //   slab A "any product"  (visible at rest start, yPercent 0)
     //   slab B "any link"     (parked below, yPercent 100)
-    // SWAP 1 (~0.30 -> 0.42): A slides up out / B slides up in -> "any link".
-    // SWAP 2 (~0.62 -> 0.74): B slides up out / A slides up in -> back to
-    //   "any product" (the resolved brand promise: "Turn any product into a viral
-    //   ad."). Re-spaced for the tighter pan (end "+=200%") so each word still
-    //   reads at scroll speed. ease "none" keeps the mapping 1:1; the slabs only
-    //   translate vertically inside the clip, so the centered line never shifts
-    //   horizontally (the fixed-width slot, sized to the wider "any product", holds
-    //   the layout).
+    //   slab C "any idea"     (parked below, yPercent 100 — the FINAL word)
+    // SWAP 1 (~0.30 -> 0.40): A slides up out / B slides up in -> "any link".
+    // SWAP 2 (~0.60 -> 0.70): B slides up out / C slides up in -> "any idea"
+    //   (the resolved line: "Turn any idea into a viral ad."). The two swaps are
+    //   well separated (a calm ~0.20 progress gap between them) so each word reads
+    //   at scroll speed before the next. ease "none" keeps the mapping 1:1; the
+    //   slabs only translate vertically inside the clip, so the centered line never
+    //   shifts horizontally — the slot's width follows the active word (below).
     const slabs = scoped<HTMLElement>(REEL.swap);
     const slabSlot = scoped<HTMLElement>(REEL.swapSlot)[0];
     const slabA = slabs.find((s) => s.dataset.swap === "a");
     const slabB = slabs.find((s) => s.dataset.swap === "b");
-    if (slabA && slabB) {
+    const slabC = slabs.find((s) => s.dataset.swap === "c");
+    if (slabA && slabB && slabC) {
       gsap.set(slabA, { yPercent: 0 });
       gsap.set(slabB, { yPercent: 100 });
+      gsap.set(slabC, { yPercent: 100 });
 
-      // Swap 1: A out (up), B in (up into place).
-      tl.to(slabA, { yPercent: -100, ease: "none", duration: 0.12 }, 0.3);
-      tl.to(slabB, { yPercent: 0, ease: "none", duration: 0.12 }, 0.3);
-      // Swap 2: B out (up), A back in (re-enters from below).
-      tl.set(slabA, { yPercent: 100 }, 0.42);
-      tl.to(slabB, { yPercent: -100, ease: "none", duration: 0.12 }, 0.62);
-      tl.to(slabA, { yPercent: 0, ease: "none", duration: 0.12 }, 0.62);
+      // Swap 1: A out (up), B in (up into place) -> "any link".
+      tl.to(slabA, { yPercent: -100, ease: "none", duration: 0.1 }, 0.3);
+      tl.to(slabB, { yPercent: 0, ease: "none", duration: 0.1 }, 0.3);
+      // Swap 2: B out (up), C in (up into place) -> "any idea" (final, no revert).
+      tl.to(slabB, { yPercent: -100, ease: "none", duration: 0.1 }, 0.6);
+      tl.to(slabC, { yPercent: 0, ease: "none", duration: 0.1 }, 0.6);
 
-      // SLOT WIDTH TIGHTEN — the only non-transform tween here, and it exists to
+      // SLOT WIDTH FOLLOW — the only non-transform tween here, and it exists to
       // KILL THE DEAD GAP: the slot is min-content of slab A ("any product"), so
-      // when the word swaps to the shorter "any link" the slot would otherwise hold
-      // the wider "any product" width and leave a gap after "Turn". We measure both
-      // slabs' real rendered widths (responsive — recomputed on every refresh) and
-      // tween the slot's explicit width down to "any link" during swap 1 and back up
-      // during swap 2, in lockstep with the vertical slab swap. The CSS
-      // `transition-[width]` on the slot smooths any class-driven reset; this scrubbed
-      // tween is what keeps the centered line gap-free as the word changes.
+      // when the word swaps the slot would otherwise hold the "any product" width
+      // and leave a gap after "Turn". We measure ALL THREE slabs' real rendered
+      // widths (responsive — recomputed on every refresh) and tween the slot's
+      // explicit width to the ACTIVE word in lockstep with each vertical swap:
+      // widthA -> widthB at swap 1, widthB -> widthC at swap 2. The CSS
+      // `transition-[width]` on the slot smooths any class-driven reset; this
+      // scrubbed tween is what keeps the centered line gap-free as the word changes.
       if (slabSlot) {
         const widthA = Math.ceil(slabA.getBoundingClientRect().width);
         const widthB = Math.ceil(slabB.getBoundingClientRect().width);
-        if (widthA > 0 && widthB > 0) {
+        const widthC = Math.ceil(slabC.getBoundingClientRect().width);
+        if (widthA > 0 && widthB > 0 && widthC > 0) {
           gsap.set(slabSlot, { width: widthA });
-          // Tighten to "any link" alongside swap 1 (word becomes "any link").
-          tl.to(slabSlot, { width: widthB, ease: "none", duration: 0.12 }, 0.3);
-          // Widen back to "any product" alongside swap 2 (word resolves).
-          tl.to(slabSlot, { width: widthA, ease: "none", duration: 0.12 }, 0.62);
+          // Follow to "any link" alongside swap 1.
+          tl.to(slabSlot, { width: widthB, ease: "none", duration: 0.1 }, 0.3);
+          // Follow to "any idea" (final word) alongside swap 2.
+          tl.to(slabSlot, { width: widthC, ease: "none", duration: 0.1 }, 0.6);
         }
       }
     }
@@ -287,8 +290,8 @@ export function buildReelScene(
  * REDUCED-MOTION / MOBILE STATIC STATE.
  *
  * No pin, no pan — a calm static layout. The hero text is shown fully resolved at
- * its initial state ("Turn any product into a viral ad."), and the five cards land
- * in a quiet flow grid (the markup switches them to flow under the same fork).
+ * the FINAL word of the swap ("Turn any idea into a viral ad."), and the five cards
+ * land in a quiet flow grid (the markup switches them to flow under the same fork).
  *
  * Video: under prefers-reduced-motion every card shows its POSTER only (the
  * VideoCard is rendered WITHOUT `autoPlayInView`, so no loop starts). When motion
@@ -314,16 +317,27 @@ export function applyReelStaticState(root: HTMLElement): () => void {
       clearProps: "transform",
     });
   }
-  // Park the headline at its initial word ("any product"): slab A visible.
+  // Rest the headline on the FINAL word ("any idea"): slab C visible (yPercent 0),
+  // slabs A + B rolled up out of view (yPercent -100), matching the upward swap
+  // direction so a reduced-motion / mobile reader lands on the resolved line.
   const slabs = gsap.utils.toArray<HTMLElement>(root.querySelectorAll(REEL.swap));
   slabs.forEach((s) => {
-    gsap.set(s, { yPercent: s.dataset.swap === "a" ? 0 : 100 });
+    gsap.set(s, { yPercent: s.dataset.swap === "c" ? 0 : -100 });
   });
-  // Drop any explicit slot width the pan path may have set, so the slot relaxes
-  // back to its min-content "any product" width (the resting word) on this fork.
+  // Pin the slot width to the FINAL word ("any idea") so "Turn" hugs it with no
+  // dead gap on this fork. Slab A drives the slot's min-content width, so without
+  // an explicit width the slot would keep the wider "any product" size while the
+  // visible word is "any idea". Measure slab C live and set it; if unmeasurable
+  // (e.g. SSR / hidden), fall back to clearing so the slot relaxes to min-content.
   const slabSlot = root.querySelector<HTMLElement>(REEL.swapSlot);
   if (slabSlot) {
-    gsap.set(slabSlot, { clearProps: "width" });
+    const slabC = slabs.find((s) => s.dataset.swap === "c");
+    const widthC = slabC ? Math.ceil(slabC.getBoundingClientRect().width) : 0;
+    if (widthC > 0) {
+      gsap.set(slabSlot, { width: widthC });
+    } else {
+      gsap.set(slabSlot, { clearProps: "width" });
+    }
   }
 
   cards.forEach((el) => {

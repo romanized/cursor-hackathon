@@ -128,15 +128,19 @@ const ACCOUNT = ["Account", "Usage and Billing"] as const;
 /**
  * The six format cards from the real Step-01 picker. "Skeleton AI" is featured
  * (MOST USED) and pre-SELECTED (red glow border + red play badge + red "Selected"
- * underline). Descriptions echo the dashboard's one-line voice. A `poster` is used
- * where a real frame render fits the visual.
+ * underline). Descriptions echo the dashboard's one-line voice.
+ *
+ * Each card carries a `templateKey` resolving to /demo/templates/<key>.jpg — the
+ * generated preview frame for that format. The image sits behind a subtle grade
+ * (object-cover, rounded); when a file is missing the card falls back to the
+ * existing red gradient wash (see `FormatCard`).
  */
 const FORMATS = [
   {
     name: "Skeleton AI",
     description: "Cinematic skeleton avatars that mouth your hook to camera.",
     overline: "Most used",
-    poster: "skeleton_1",
+    templateKey: "skeleton_ai",
     featured: true,
     selected: true,
   },
@@ -144,7 +148,7 @@ const FORMATS = [
     name: "Cartoon",
     description: "Hand-styled 2D characters for a playful, scroll-stopping look.",
     overline: "Format",
-    poster: "simpson_1",
+    templateKey: "cartoon",
     featured: false,
     selected: false,
   },
@@ -152,7 +156,7 @@ const FORMATS = [
     name: "3D CGI",
     description: "Photoreal 3D product renders with studio lighting and motion.",
     overline: "Format",
-    poster: null,
+    templateKey: "cgi_3d",
     featured: false,
     selected: false,
   },
@@ -160,7 +164,7 @@ const FORMATS = [
     name: "Animated body part",
     description: "Talking hands and faces that demo the product up close.",
     overline: "Format",
-    poster: "skeleton_2",
+    templateKey: "animated_body_part",
     featured: false,
     selected: false,
   },
@@ -168,7 +172,7 @@ const FORMATS = [
     name: "AI Streamer",
     description: "A virtual streamer reacting live to your offer on stream.",
     overline: "Format",
-    poster: null,
+    templateKey: "ai_streamer",
     featured: false,
     selected: false,
   },
@@ -176,7 +180,7 @@ const FORMATS = [
     name: "Pibble Dog",
     description: "The viral pibble mascot delivering your line with attitude.",
     overline: "Format",
-    poster: "simpson_2",
+    templateKey: "pibble_dog",
     featured: false,
     selected: false,
   },
@@ -202,14 +206,16 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
     {
       // NON-pinned scrub: the reveal is bound to this section entering the
       // viewport. start 'top bottom' = the moment its top edge appears at the
-      // bottom of the screen (as the hero pin releases); end 'top 30%' lands the
-      // panel resting once its top reaches ~30% down. Adds no pinned length, so
-      // the single hero pin stays the only pin (no double-scroll).
+      // bottom of the screen (as the hero pin releases); end 'top 45%' lands the
+      // panel resting once its top reaches ~45% down — a SHORTER scrub range than
+      // before (top 30%), so the section reads slightly less tall while keeping
+      // the full rise-reveal + handoff. Adds no pinned length, so the single hero
+      // pin stays the only pin (no double-scroll).
       scrollTrigger: reducedMotion
         ? false
         : {
             start: "top bottom",
-            end: "top 30%",
+            end: "top 45%",
             scrub: 1,
             invalidateOnRefresh: true,
             id: "sneak-peek",
@@ -225,7 +231,7 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
       ref={scopeRef}
       aria-label={META?.name ?? "Inside the studio"}
       className={cn(
-        "relative bg-bg pb-[clamp(6rem,12vh,10rem)] pt-[clamp(4rem,9vh,7rem)]",
+        "relative bg-bg pb-[clamp(4rem,8vh,7rem)] pt-[clamp(2.5rem,6vh,4.5rem)]",
         className,
       )}
     >
@@ -257,7 +263,7 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
         {/* Section header rides above the rising panel — landing-page Studio Black
             type/voice (NO red here; red lives only inside the demo panel). No
             numbered eyebrow/kicker chrome — just the headline + supporting copy. */}
-        <div className="mb-8 flex flex-col items-center text-center md:mb-12">
+        <div className="mb-7 flex flex-col items-center text-center md:mb-10">
           <h2 className="max-w-[18ch] text-balance font-sans text-[clamp(2rem,4.5vw,4rem)] font-medium leading-[0.98] tracking-tighter text-fg">
             A real window into the studio.
           </h2>
@@ -273,18 +279,22 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
           data-sneak="panel"
           style={DEMO_VARS}
           className={cn(
-            "hookm-demo relative mx-auto w-full max-w-6xl will-change-transform",
+            "hookm-demo relative mx-auto w-full max-w-7xl will-change-transform",
             bricolage.variable,
             instrument.variable,
           )}
         >
-          {/* The panel's OWN seamless rounded top — identical to the fixed teaser,
-              so the swap is invisible when the panel rises to meet it. */}
-          <PanelTop label="Hookm Studio" />
-
-          {/* THE APP FRAME — left sidebar · main work area. Warm-black bg, the real
-              dashboard's borders + surfaces. */}
-          <div className="grid grid-cols-1 overflow-hidden rounded-b-[var(--hk-radius-xl)] border-x border-b border-[var(--hk-border-strong)] bg-[var(--hk-bg)] shadow-[0_50px_140px_-60px_rgba(0,0,0,0.95)] lg:grid-cols-[228px_minmax(0,1fr)]">
+          {/* THE APP FRAME — its OWN rounded top IS the seam between the hero and
+              this section (no separate labeled lip): a RED top edge + soft top
+              highlight + ambient red lift, identical to the fixed teaser so the
+              swap is invisible when the panel rises to meet it. Left sidebar · main
+              work area; warm-black bg, the real dashboard's borders + surfaces. */}
+          <div
+            className={cn(
+              "grid grid-cols-1 overflow-hidden rounded-[var(--hk-radius-xl)] border-x border-b border-t-2 border-[var(--hk-border-strong)] border-t-[var(--hk-accent)]/55 bg-[var(--hk-bg)] lg:grid-cols-[244px_minmax(0,1fr)]",
+              "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.10),0_-10px_30px_-12px_rgba(239,68,68,0.35),0_50px_140px_-60px_rgba(0,0,0,0.95)]",
+            )}
+          >
             <DemoSidebar />
             <div className="flex min-w-0 flex-col">
               <DemoStepStrip />
@@ -294,30 +304,6 @@ export function SneakPeek({ id, className }: SneakPeekProps) {
         </div>
       </Container>
     </section>
-  );
-}
-
-/**
- * The seamless rounded panel-top atop the REAL rising panel. Carries the same
- * geometry, RED top edge and grab handle as the fixed `TeaserSlip` header, so when
- * the panel rises to meet the teaser the swap reads as one continuous surface.
- */
-function PanelTop({ label }: { label: string }) {
-  return (
-    <div
-      className={cn(
-        "relative flex w-full flex-col items-center gap-2 rounded-t-[var(--hk-radius-xl)] border-x border-t-2 border-[var(--hk-accent)]/55 bg-[var(--hk-surface)] px-6 pb-3 pt-3.5",
-        // Inset top highlight so the rounded edge catches light + a soft red lift.
-        "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.10),0_-10px_30px_-12px_rgba(239,68,68,0.45)]",
-      )}
-    >
-      {/* Grab-handle pill — minimal, warm-light. */}
-      <span aria-hidden className="h-1 w-10 rounded-full bg-[var(--hk-text)]/25" />
-      {/* Tiny overline label, RED (the real app's accent). */}
-      <span className="font-[family-name:var(--hk-font-sans)] text-[10px] font-medium uppercase leading-none tracking-[0.18em] text-[var(--hk-accent)]">
-        {label}
-      </span>
-    </div>
   );
 }
 
@@ -340,7 +326,7 @@ function PanelTop({ label }: { label: string }) {
  */
 function TeaserSlip() {
   return (
-    <div className="relative w-full max-w-6xl">
+    <div className="relative w-full max-w-7xl">
       {/* Ambient RED glow ABOVE the slip so the window lifts off the #050505 canvas
           — the dashboard's signature accent, low-opacity, soft. */}
       <span
@@ -349,34 +335,27 @@ function TeaserSlip() {
       />
 
       {/* THE WINDOW — warm-dark surface, RED top edge, rounded top, ambient red lift.
-          overflow-hidden keeps the bottom open into the viewport. translate-y pushes
-          the lower portion off the fold so a controlled ~9vh sliver peeks up. */}
+          NO label/handle lip: the clean rounded-top edge IS the seam between the
+          hero and this section. overflow-hidden keeps the bottom open into the
+          viewport; translate-y pushes the lower portion off the fold so a
+          controlled sliver peeks up. */}
       <div
         className={cn(
-          "relative translate-y-[34px] overflow-hidden rounded-t-[var(--hk-radius-xl)] border-x border-t-2 border-[var(--hk-accent)] bg-[var(--hk-surface)]",
+          "relative translate-y-[28px] overflow-hidden rounded-t-[var(--hk-radius-xl)] border-x border-t-2 border-[var(--hk-accent)] bg-[var(--hk-bg)]",
           // The lift: a red ambient shadow above + a deep base shadow below so the
           // slip clearly reads as a lifted, separate window.
           "shadow-[0_-12px_40px_-8px_rgba(239,68,68,0.45),inset_0_1px_0_0_rgba(255,255,255,0.12)]",
         )}
       >
-        {/* Header lip — grab handle + RED label, matching the real PanelTop. */}
-        <div className="flex flex-col items-center gap-2 px-6 pb-3 pt-3.5">
+        {/* A strip of panel body so a NOTICEABLE sliver of "real window" peeks up,
+            with NO labeled lip — just the clean rounded-top edge of the dashboard
+            surface. A faint red wash along the top edge + a couple of skeleton rows
+            hint at the dashboard below, then a downward fade melts the bottom into
+            the viewport. */}
+        <div className="relative px-6 pb-9 pt-5">
           <span
             aria-hidden
-            className="h-1 w-10 rounded-full bg-[var(--hk-text)]/25"
-          />
-          <span className="font-[family-name:var(--hk-font-sans)] text-[10px] font-medium uppercase leading-none tracking-[0.18em] text-[var(--hk-accent)]">
-            Hookm Studio · preview
-          </span>
-        </div>
-
-        {/* A strip of panel body so a NOTICEABLE sliver of "real window" peeks up.
-            A faint red wash + a couple of skeleton rows hint at the dashboard
-            below, then a downward fade melts the bottom into the viewport. */}
-        <div className="relative border-t border-[var(--hk-border)] bg-[var(--hk-bg)] px-6 pb-10 pt-4">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_120%_at_50%_0%,rgba(239,68,68,0.10),transparent_70%)]"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_120%_at_50%_0%,rgba(239,68,68,0.12),transparent_70%)]"
           />
           <div className="relative flex items-center gap-3">
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--hk-accent)] shadow-[0_0_8px_1px_rgba(239,68,68,0.6)]" />
@@ -567,7 +546,7 @@ function DemoStepStrip() {
  */
 function DemoMain() {
   return (
-    <div className="relative flex flex-col gap-7 px-5 py-8 sm:px-8 sm:py-10">
+    <div className="relative flex flex-col gap-6 px-5 py-7 sm:px-9 sm:py-9">
       {/* Ambient red wash behind the picker (the dashboard's `.ambient-red`). */}
       <span
         aria-hidden
@@ -608,8 +587,9 @@ function DemoMain() {
         </span>
       </div>
 
-      {/* FORMAT CARD GRID. */}
-      <div className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* FORMAT CARD GRID — roomier gutters so the wider panel gives each card
+          breathing space for its preview image + label + description. */}
+      <div className="relative grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {FORMATS.map((f) => (
           <FormatCard key={f.name} format={f} />
         ))}
@@ -622,39 +602,48 @@ function DemoMain() {
  * A single FORMAT CARD — mimics the real template picker card + components/ui/card.
  * Featured/selected (Skeleton AI) gets the red glow border, red play badge, and a
  * red "Selected" underline; the rest are outlined surfaces with "Click to choose".
- * Where a poster fits, a real frame render sits behind a soft gradient.
+ *
+ * Each card shows the generated preview frame for its format (an `<Image>` slot
+ * pointing at /demo/templates/<templateKey>.jpg, object-cover + rounded, behind a
+ * subtle bottom-up grade so the FORMAT overline + title + one-line description stay
+ * legible). If the file is missing the image simply yields and the red gradient
+ * fallback wash (always rendered behind it) shows through — no broken state.
+ *
+ * Layout: the preview image occupies the upper region; an overline + title sit on
+ * the image, and the description + status pin to the bottom over the grade — giving
+ * each card room for image + FORMAT overline + title + one-line description cleanly.
  */
 function FormatCard({ format }: { format: (typeof FORMATS)[number] }) {
-  const { name, description, overline, poster, featured, selected } = format;
+  const { name, description, overline, templateKey, featured, selected } = format;
   return (
     <div
       data-sneak="reveal"
       className={cn(
-        "group relative flex aspect-[3/4] flex-col justify-between overflow-hidden rounded-[var(--hk-radius-xl)] border p-5 text-left",
+        "group relative flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-[var(--hk-radius-xl)] border p-5 text-left",
         selected
           ? "border-[var(--hk-accent)] bg-[rgba(239,68,68,0.06)] shadow-[var(--hk-glow)]"
           : "border-[var(--hk-border)] bg-[var(--hk-surface)]",
       )}
     >
-      {/* Poster frame render behind a graded wash, where a visual fits. */}
-      {poster ? (
-        <>
-          <Image
-            src={`/videos/posters/${poster}.jpg`}
-            alt=""
-            aria-hidden
-            fill
-            sizes="(min-width: 1024px) 240px, (min-width: 640px) 45vw, 90vw"
-            className="object-cover opacity-30"
-          />
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--hk-bg)] via-[var(--hk-bg)]/70 to-[var(--hk-bg)]/30" />
-        </>
-      ) : (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,rgba(248,113,113,0.08),transparent_60%)]"
-        />
-      )}
+      {/* Fallback wash — always rendered BEHIND the image so a missing
+          /demo/templates file degrades gracefully to the red gradient. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,rgba(248,113,113,0.10),transparent_62%)]"
+      />
+
+      {/* Generated preview frame — object-cover, rounded (clipped by the card),
+          behind a subtle bottom-up grade so the overline/title/description read
+          cleanly over it. Decorative (aria-hidden); the title labels the card. */}
+      <Image
+        src={`/demo/templates/${templateKey}.jpg`}
+        alt=""
+        aria-hidden
+        fill
+        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 45vw, 90vw"
+        className="object-cover opacity-45 transition-opacity duration-300 group-hover:opacity-60"
+      />
+      <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--hk-bg)] via-[var(--hk-bg)]/78 to-[var(--hk-bg)]/12" />
 
       <div className="relative flex items-start justify-between">
         <div className="flex flex-col gap-1">
@@ -678,7 +667,7 @@ function FormatCard({ format }: { format: (typeof FORMATS)[number] }) {
       </div>
 
       <div className="relative mt-auto">
-        <p className="mb-3 line-clamp-3 font-[family-name:var(--hk-font-sans)] text-sm leading-relaxed text-[var(--hk-muted)]">
+        <p className="mb-3 line-clamp-2 font-[family-name:var(--hk-font-sans)] text-sm leading-relaxed text-[var(--hk-muted)]">
           {description}
         </p>
         {selected ? (
