@@ -17,7 +17,7 @@ const instrument = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "hookm — viral UGC, on tap",
+  title: "Hookline — viral UGC, on tap",
   description: "Turn a product URL into a TikTok-ready hook video.",
 };
 

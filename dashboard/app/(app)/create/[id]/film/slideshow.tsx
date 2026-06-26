@@ -91,7 +91,7 @@ export function Slideshow({
           })}
           <div className="absolute bottom-4 left-4 right-4 flex justify-between text-[10px] uppercase tracking-widest text-white/80">
             <span>Beat {String(active + 1).padStart(2, "0")} / {String(clips.length).padStart(2, "0")}</span>
-            <span>hookm</span>
+            <span>Hookline</span>
           </div>
         </div>
         {voiceUrl && (

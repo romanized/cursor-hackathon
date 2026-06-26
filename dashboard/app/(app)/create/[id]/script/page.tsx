@@ -13,10 +13,23 @@ export default async function ScriptStep({ params }: { params: Promise<{ id: str
       .single(),
     supabase
       .from("beats")
-      .select("idx, label, text, visual_prompt")
+      .select("idx, label, text, visual_prompt, meta")
       .eq("project_id", id)
       .order("idx"),
   ]);
+
+  const beatsForEditor = (beats ?? []).map((b) => {
+    const meta = (b.meta ?? {}) as { type?: string; role?: string; duration_seconds?: number };
+    return {
+      idx: b.idx,
+      label: b.label,
+      text: b.text,
+      visual_prompt: b.visual_prompt,
+      type: meta.type === "microscopic" ? ("microscopic" as const) : ("character" as const),
+      role: meta.role ?? "",
+      duration_seconds: typeof meta.duration_seconds === "number" ? meta.duration_seconds : 4,
+    };
+  });
 
   return (
     <div className="flex flex-col gap-8">
@@ -37,7 +50,7 @@ export default async function ScriptStep({ params }: { params: Promise<{ id: str
         key={`${beats?.length ?? 0}:${(project?.voiceover_script ?? "").length}`}
         projectId={id}
         project={project!}
-        initialBeats={beats ?? []}
+        initialBeats={beatsForEditor}
       />
     </div>
   );

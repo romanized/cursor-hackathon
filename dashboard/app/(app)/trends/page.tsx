@@ -11,7 +11,7 @@ export default function TrendsPage() {
         </h1>
       </header>
       <Card className="p-8 text-muted">
-        Soon: trending hooks, scripts, and templates from across hookm. Build the first batch in the Create flow — community feed lights up once we ship.
+        Soon: trending hooks, scripts, and templates from across Hookline. Build the first batch in the Create flow — community feed lights up once we ship.
       </Card>
     </div>
   );

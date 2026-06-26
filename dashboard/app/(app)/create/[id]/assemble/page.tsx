@@ -1,42 +1,52 @@
-import { createClient } from "@/lib/supabase/server";
 import { Accent } from "@/components/accent";
+import { createClient } from "@/lib/supabase/server";
 import { AssemblePanel } from "./assemble-panel";
 
 // FFmpeg render can take 5-20s for ~24s of footage. Bump the action ceiling
 // so Vercel doesn't kill it mid-encode.
 export const maxDuration = 300;
 
-export default async function AssembleStep({ params }: { params: Promise<{ id: string }> }) {
+export default async function AssembleStep({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: clips }, { data: voices }, { data: existing }] = await Promise.all([
-    supabase
-      .from("assets")
-      .select("id, beat_id")
-      .eq("project_id", id)
-      .eq("kind", "clip")
-      .eq("status", "ready")
-      .not("beat_id", "is", null),
-    supabase
-      .from("assets")
-      .select("id, beat_id")
-      .eq("project_id", id)
-      .eq("kind", "voiceover")
-      .eq("status", "ready")
-      .not("beat_id", "is", null),
-    supabase
-      .from("assets")
-      .select("id")
-      .eq("project_id", id)
-      .eq("kind", "final")
-      .eq("status", "ready")
-      .maybeSingle(),
-  ]);
+  const [{ data: clips }, { data: voices }, { data: existing }] =
+    await Promise.all([
+      supabase
+        .from("assets")
+        .select("id, beat_id")
+        .eq("project_id", id)
+        .eq("kind", "clip")
+        .eq("status", "ready")
+        .not("beat_id", "is", null),
+      supabase
+        .from("assets")
+        .select("id, beat_id")
+        .eq("project_id", id)
+        .eq("kind", "voiceover")
+        .eq("status", "ready")
+        .not("beat_id", "is", null),
+      supabase
+        .from("assets")
+        .select("id")
+        .eq("project_id", id)
+        .eq("kind", "final")
+        .eq("status", "ready")
+        .maybeSingle(),
+    ]);
 
-  const clipBeatIds = new Set(clips?.map((c) => c.beat_id).filter((id): id is string => Boolean(id)));
-  const voiceBeatIds = new Set(voices?.map((v) => v.beat_id).filter((id): id is string => Boolean(id)));
+  const clipBeatIds = new Set(
+    clips?.map((c) => c.beat_id).filter((id): id is string => Boolean(id))
+  );
+  const voiceBeatIds = new Set(
+    voices?.map((v) => v.beat_id).filter((id): id is string => Boolean(id))
+  );
   const hasVoice =
-    clipBeatIds.size > 0 && [...clipBeatIds].every((beatId) => voiceBeatIds.has(beatId));
+    clipBeatIds.size > 0 &&
+    [...clipBeatIds].every((beatId) => voiceBeatIds.has(beatId));
 
   return (
     <div className="flex flex-col gap-8">
@@ -46,7 +56,8 @@ export default async function AssembleStep({ params }: { params: Promise<{ id: s
           Stitch it <Accent>together.</Accent>
         </h1>
         <p className="text-muted max-w-xl">
-          FFmpeg stitches every beat clip and bakes the voiceover audio straight into a single 9:16 MP4. Takes 5–20 seconds.
+          FFmpeg stitches every beat clip and bakes the voiceover audio straight
+          into a single 9:16 MP4. Takes 5–20 seconds.
         </p>
       </header>
 

@@ -10,7 +10,24 @@ import { Card } from "@/components/ui/card";
 import { CreditPill } from "@/components/ui/credit-pill";
 import { generateScriptForProject, saveScript } from "@/lib/actions/projects";
 
-type Beat = { idx: number; label: string | null; text: string; visual_prompt: string | null };
+type BeatType = "character" | "microscopic";
+type Beat = {
+  idx: number;
+  label: string | null;
+  text: string;
+  visual_prompt: string | null;
+  type: BeatType;
+  role: string;
+  duration_seconds: number;
+};
+type EditBeat = {
+  label: string;
+  text: string;
+  visual_prompt: string;
+  type: BeatType;
+  role: string;
+  duration_seconds: number;
+};
 
 export function ScriptEditor({
   projectId,
@@ -29,14 +46,22 @@ export function ScriptEditor({
   initialBeats: Beat[];
 }) {
   const [script, setScript] = useState(project.voiceover_script ?? "");
-  const [beats, setBeats] = useState<Array<{ label: string; text: string; visual_prompt: string }>>(
+  const [beats, setBeats] = useState<EditBeat[]>(
     initialBeats.length
-      ? initialBeats.map((b) => ({ label: b.label ?? "", text: b.text, visual_prompt: b.visual_prompt ?? "" }))
+      ? initialBeats.map((b) => ({
+          label: b.label ?? "",
+          text: b.text,
+          visual_prompt: b.visual_prompt ?? "",
+          type: b.type,
+          role: b.role,
+          duration_seconds: b.duration_seconds,
+        }))
       : [
-          { label: "Hook", text: "", visual_prompt: "" },
-          { label: "Problem", text: "", visual_prompt: "" },
-          { label: "Reveal", text: "", visual_prompt: "" },
-          { label: "CTA", text: "", visual_prompt: "" },
+          { label: "Hook", text: "", visual_prompt: "", type: "character", role: "hook", duration_seconds: 4 },
+          { label: "Escalation", text: "", visual_prompt: "", type: "character", role: "escalation", duration_seconds: 4 },
+          { label: "Reframe", text: "", visual_prompt: "", type: "character", role: "reframe", duration_seconds: 3 },
+          { label: "Mechanism", text: "", visual_prompt: "", type: "microscopic", role: "mechanism", duration_seconds: 3 },
+          { label: "Payoff", text: "", visual_prompt: "", type: "character", role: "payoff", duration_seconds: 3 },
         ],
   );
   const router = useRouter();
@@ -60,7 +85,10 @@ export function ScriptEditor({
     setBeats((cur) => cur.map((b, j) => (i === j ? { ...b, ...patch } : b)));
   }
   function add() {
-    setBeats((cur) => [...cur, { label: "", text: "", visual_prompt: "" }]);
+    setBeats((cur) => [
+      ...cur,
+      { label: "", text: "", visual_prompt: "", type: "character", role: "", duration_seconds: 4 },
+    ]);
   }
   function remove(i: number) {
     setBeats((cur) => cur.filter((_, j) => j !== i));
@@ -132,9 +160,9 @@ export function ScriptEditor({
             {beats.map((b, i) => (
               <li
                 key={i}
-                className="grid gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-elev)] p-4 sm:grid-cols-[60px_1fr_auto]"
+                className="grid gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-elev)] p-4 sm:grid-cols-[96px_1fr_auto]"
               >
-                <div className="flex flex-col items-center gap-1 sm:items-start">
+                <div className="flex flex-col items-center gap-1.5 sm:items-start">
                   <span className="grid size-8 place-items-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)] text-sm font-medium">
                     {(i + 1).toString().padStart(2, "0")}
                   </span>
@@ -144,6 +172,24 @@ export function ScriptEditor({
                     placeholder="Hook"
                     className="h-8 px-2 text-xs"
                   />
+                  <div className="flex w-full overflow-hidden rounded-full border border-[var(--color-border)] text-[10px] font-medium uppercase tracking-wide">
+                    <button
+                      type="button"
+                      onClick={() => update(i, { type: "character" })}
+                      className={`flex-1 px-1.5 py-1 ${b.type === "character" ? "bg-[var(--color-accent)] text-white" : "text-faint hover:text-text"}`}
+                      title="Acted character beat — uses the mascot reference"
+                    >
+                      Char
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update(i, { type: "microscopic" })}
+                      className={`flex-1 px-1.5 py-1 ${b.type === "microscopic" ? "bg-[var(--color-accent)] text-white" : "text-faint hover:text-text"}`}
+                      title="Microscopic mechanism CGI — no character"
+                    >
+                      CGI
+                    </button>
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Textarea
@@ -155,7 +201,11 @@ export function ScriptEditor({
                   <Input
                     value={b.visual_prompt}
                     onChange={(e) => update(i, { visual_prompt: e.target.value })}
-                    placeholder="Visual prompt (CGI skeleton holds product close-up, neon backlight)"
+                    placeholder={
+                      b.type === "microscopic"
+                        ? "Microscopic CGI prompt (glowing molecules in the cylinder, dark teal, neon edges)"
+                        : "Character visual prompt (the character drowning in shallow water, reaching up)"
+                    }
                   />
                 </div>
                 <button

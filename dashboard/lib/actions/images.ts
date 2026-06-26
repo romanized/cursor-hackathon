@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
-import { generateBeatImage, generateMascotImage } from "@/lib/providers/google";
+import { generateBeatImage, generateMascotImage, RENDER_STYLE } from "@/lib/providers/google";
 import { generateBeatImageFal } from "@/lib/providers/fal";
 import { env } from "@/lib/env";
 import { chargeCredits, COST } from "@/lib/credits";
@@ -28,14 +28,20 @@ async function clearDownstreamOfMascot(
     .in("kind", ["image", "clip", "final"]);
 
   const stale = (rows ?? []).filter(
-    (r) => r.kind === "clip" || r.kind === "final" || (r.kind === "image" && r.beat_id),
+    (r) =>
+      r.kind === "clip" ||
+      r.kind === "final" ||
+      (r.kind === "image" && r.beat_id),
   );
   if (!stale.length) return;
 
-  const paths = stale.map((r) => r.storage_path).filter((p): p is string => Boolean(p));
+  const paths = stale
+    .map((r) => r.storage_path)
+    .filter((p): p is string => Boolean(p));
   if (paths.length) {
     const { error } = await svc.storage.from("media").remove(paths);
-    if (error) console.warn("[clearDownstreamOfMascot] storage remove failed", error);
+    if (error)
+      console.warn("[clearDownstreamOfMascot] storage remove failed", error);
   }
 
   const { error: delErr } = await supabase
@@ -47,7 +53,10 @@ async function clearDownstreamOfMascot(
     );
   if (delErr) throw delErr;
 
-  console.log("[clearDownstreamOfMascot]", { projectId, cleared: stale.length });
+  console.log("[clearDownstreamOfMascot]", {
+    projectId,
+    cleared: stale.length,
+  });
 }
 
 async function loadImageBytes(
@@ -63,7 +72,9 @@ async function loadImageBytes(
 
 async function requireUser() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   return { supabase, user };
 }
@@ -83,7 +94,9 @@ export async function recordImageAsset(input: {
   const svc = createService();
 
   // Enforce 9:16 even on manual uploads — crop in place before we record the row.
-  const { data: blob, error: dlErr } = await svc.storage.from("media").download(input.storagePath);
+  const { data: blob, error: dlErr } = await svc.storage
+    .from("media")
+    .download(input.storagePath);
   if (!dlErr && blob) {
     const fitted = await fitTo916(
       Buffer.from(await blob.arrayBuffer()),
@@ -151,7 +164,9 @@ export async function generateMascot(projectId: string) {
     await clearDownstreamOfMascot(svc, supabase, projectId);
   }
 
-  const { bytes, mimeType } = await generateMascotImage({ templateId: project.template_id });
+  const { bytes, mimeType } = await generateMascotImage({
+    templateId: project.template_id,
+  });
 
   const ext = mimeType.split("/")[1] ?? "png";
   const path = `${user.id}/${projectId}/mascot.${ext}`;
@@ -164,16 +179,26 @@ export async function generateMascot(projectId: string) {
   const patch: TablesUpdate<"projects"> = {
     meta: { ...meta, mascot_storage_path: path } as never,
   };
-  const { error: metaErr } = await supabase.from("projects").update(patch).eq("id", projectId);
+  const { error: metaErr } = await supabase
+    .from("projects")
+    .update(patch)
+    .eq("id", projectId);
   if (metaErr) throw metaErr;
 
   try {
-    await chargeCredits({ userId: user.id, delta: COST.imagePerBeat, reason: "mascot", projectId });
+    await chargeCredits({
+      userId: user.id,
+      delta: COST.imagePerBeat,
+      reason: "mascot",
+      projectId,
+    });
   } catch (e) {
     console.warn("[generateMascot] credit charge failed", e);
   }
 
-  const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
+  const { data: signed } = await svc.storage
+    .from("media")
+    .createSignedUrl(path, 60 * 60 * 24);
   revalidatePath(`/create/${projectId}/images`);
   revalidatePath(`/create/${projectId}`, "layout");
   return { url: signed?.signedUrl ?? null, cleared: isReroll, static: false };
@@ -189,28 +214,30 @@ export async function generateBeatImages(projectId: string) {
   const { supabase, user } = await requireUser();
   const svc = createService();
 
-  const [{ data: project }, { data: beats }, { data: existing }] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("template_id, product_name, product_id, meta")
-      .eq("id", projectId)
-      .single(),
-    supabase
-      .from("beats")
-      .select("id, idx, label, text, visual_prompt")
-      .eq("project_id", projectId)
-      .order("idx"),
-    supabase
-      .from("assets")
-      .select("beat_id, status")
-      .eq("project_id", projectId)
-      .eq("kind", "image"),
-  ]);
+  const [{ data: project }, { data: beats }, { data: existing }] =
+    await Promise.all([
+      supabase
+        .from("projects")
+        .select("template_id, product_name, product_id, meta")
+        .eq("id", projectId)
+        .single(),
+      supabase
+        .from("beats")
+        .select("id, idx, label, text, visual_prompt, meta")
+        .eq("project_id", projectId)
+        .order("idx"),
+      supabase
+        .from("assets")
+        .select("beat_id, status")
+        .eq("project_id", projectId)
+        .eq("kind", "image"),
+    ]);
 
   if (!project) throw new Error("project not found");
   if (!beats?.length) throw new Error("no beats — write the script first");
 
-  let mascotPath = (project.meta as ProjectMeta | null)?.mascot_storage_path ?? null;
+  let mascotPath =
+    (project.meta as ProjectMeta | null)?.mascot_storage_path ?? null;
   if (hasTemplateReference(project.template_id)) {
     const seeded = await seedStaticMascotIfNeeded({
       supabase,
@@ -241,14 +268,19 @@ export async function generateBeatImages(projectId: string) {
       .select("images")
       .eq("id", project.product_id)
       .single();
-    const urls = Array.isArray(product?.images) ? (product!.images as string[]) : [];
+    const urls = Array.isArray(product?.images)
+      ? (product!.images as string[])
+      : [];
     const firstUrl = urls[0];
     if (firstUrl) {
       try {
         const r = await fetch(firstUrl);
         if (r.ok) {
           const buf = Buffer.from(await r.arrayBuffer());
-          referenceImage = { bytes: buf, mimeType: r.headers.get("content-type") || "image/jpeg" };
+          referenceImage = {
+            bytes: buf,
+            mimeType: r.headers.get("content-type") || "image/jpeg",
+          };
         }
       } catch (e) {
         console.warn("[generateBeatImages] reference fetch failed", e);
@@ -260,7 +292,10 @@ export async function generateBeatImages(projectId: string) {
   let mascotImage: { bytes: Buffer; mimeType: string } | null = null;
   if (mascotPath) {
     mascotImage = await loadImageBytes(svc, mascotPath);
-    if (!mascotImage) console.warn("[generateBeatImages] mascot download failed", { mascotPath });
+    if (!mascotImage)
+      console.warn("[generateBeatImages] mascot download failed", {
+        mascotPath,
+      });
   }
 
   console.log("[generateBeatImages] start", {
@@ -275,23 +310,29 @@ export async function generateBeatImages(projectId: string) {
   // processing → ready/failed per beat, and the client listens via Supabase
   // Realtime so the UI updates as each result lands (not at the end).
   const results = await Promise.allSettled(
-    todo.map((beat) => generateOneImage({
-      svc,
-      supabase,
-      userId: user.id,
-      projectId,
-      project,
-      beat,
-      referenceImage,
-      mascotImage,
-    })),
+    todo.map((beat) =>
+      generateOneImage({
+        svc,
+        supabase,
+        userId: user.id,
+        projectId,
+        project,
+        beat,
+        referenceImage,
+        mascotImage,
+      }),
+    ),
   );
 
   let generated = 0;
   const errors: Array<{ beat: number; error: string }> = [];
   results.forEach((r, i) => {
     if (r.status === "fulfilled") generated += 1;
-    else errors.push({ beat: todo[i].idx, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+    else
+      errors.push({
+        beat: todo[i].idx,
+        error: r.reason instanceof Error ? r.reason.message : String(r.reason),
+      });
   });
 
   revalidatePath(`/create/${projectId}/images`);
@@ -307,32 +348,64 @@ async function generateBeatImageWithFal(args: {
   projectId: string;
   project: { template_id: string | null; product_name: string | null };
   beat: { label: string | null; text: string; visual_prompt: string | null };
+  beatType: "character" | "microscopic";
   referenceImage: { bytes: Buffer; mimeType: string } | null;
   mascotImage: { bytes: Buffer; mimeType: string } | null;
 }): Promise<{ bytes: Buffer; mimeType: string }> {
-  const { svc, userId, projectId, project, beat, referenceImage, mascotImage } = args;
+  const { svc, userId, projectId, project, beat, beatType, mascotImage } = args;
+
+  // Microscopic = abstract macro scene → drop the product photo, keep the mascot
+  // as a cameo. Character beats keep both refs.
+  const referenceImage = beatType === "microscopic" ? null : args.referenceImage;
 
   // Upload byte refs → signed URLs fal can fetch. tmp/ so they're easy to GC.
+  // Order matters: product first, mascot second — the prompt refers to them by
+  // position so Nano Banana keeps each one consistent.
   const refUrls: string[] = [];
-  async function refToUrl(img: { bytes: Buffer; mimeType: string }, tag: string) {
+  async function refToUrl(
+    img: { bytes: Buffer; mimeType: string },
+    tag: string,
+  ) {
     const ext = img.mimeType.split("/")[1] ?? "png";
     const path = `${userId}/${projectId}/tmp/falref-${tag}.${ext}`;
-    await svc.storage.from("media").upload(path, img.bytes, { contentType: img.mimeType, upsert: true });
-    const { data } = await svc.storage.from("media").createSignedUrl(path, 60 * 30);
+    await svc.storage
+      .from("media")
+      .upload(path, img.bytes, { contentType: img.mimeType, upsert: true });
+    const { data } = await svc.storage
+      .from("media")
+      .createSignedUrl(path, 60 * 30);
     if (data?.signedUrl) refUrls.push(data.signedUrl);
   }
   if (referenceImage) await refToUrl(referenceImage, "product");
   if (mascotImage) await refToUrl(mascotImage, "mascot");
 
-  const scene = beat.visual_prompt?.trim() || `Visualize this voiceover beat: "${beat.text}"`;
+  const which = referenceImage ? "second" : "first";
+  const renderStyle =
+    (project.template_id && RENDER_STYLE[project.template_id]) || RENDER_STYLE.cgi_3d;
+  const scene =
+    beat.visual_prompt?.trim() ||
+    `Visualize this voiceover beat: "${beat.text}"`;
+
+  // The mascot lock leads the prompt so the SAME character appears in every beat
+  // instead of a new one each time.
+  const lead = mascotImage
+    ? beatType === "microscopic"
+      ? `The ${which} supplied image is the brand MASCOT. Include this EXACT character somewhere in the frame as a smaller cameo (observing or gesturing toward the visualization) — identical face, colors, outfit and proportions, do NOT redesign it. The macro mechanism stays the main subject.`
+      : `CHARACTER LOCK — the ${which} supplied image is the brand MASCOT and is the main subject. Reproduce this EXACT character: identical face, head, body shape, colors, outfit and proportions. Do NOT redesign, restyle, recolor or swap the character — it must be unmistakably the same character as the reference image in every beat.`
+    : "";
+
   const prompt = [
-    "UGC-style vertical short-form ad frame.",
-    project.product_name ? `Featured product: ${project.product_name}.` : "",
-    referenceImage ? "Keep the product (first reference image) identifiable and consistent." : "",
-    mascotImage ? "Keep the mascot character (reference image) design identical across scenes." : "",
+    lead,
+    referenceImage
+      ? "The first supplied image is the product — keep it identifiable and consistent in the scene."
+      : "",
     `Scene: ${scene}`,
-    "Vertical portrait 9:16 (720×1280). No text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
-  ].filter(Boolean).join("\n\n");
+    project.product_name ? `Featured product: ${project.product_name}.` : "",
+    `Style and lighting: ${renderStyle}`,
+    "Vertical portrait 9:16 (720×1280). No text overlays, no logos, no watermarks. One image. PG-rated, brand-safe, no real people, no copyrighted characters.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   return generateBeatImageFal({ prompt, referenceImageUrls: refUrls });
 }
@@ -343,11 +416,34 @@ async function generateOneImage(args: {
   userId: string;
   projectId: string;
   project: { template_id: string | null; product_name: string | null };
-  beat: { id: string; idx: number; label: string | null; text: string; visual_prompt: string | null };
+  beat: {
+    id: string;
+    idx: number;
+    label: string | null;
+    text: string;
+    visual_prompt: string | null;
+    meta?: unknown;
+  };
   referenceImage: { bytes: Buffer; mimeType: string } | null;
   mascotImage: { bytes: Buffer; mimeType: string } | null;
 }) {
-  const { svc, supabase, userId, projectId, project, beat, referenceImage, mascotImage } = args;
+  const {
+    svc,
+    supabase,
+    userId,
+    projectId,
+    project,
+    beat,
+    referenceImage,
+    mascotImage,
+  } = args;
+
+  // Every image features the mascot. Microscopic beats drop the product photo
+  // (abstract macro scene) but keep the character as a cameo.
+  const beatType =
+    (beat.meta as { type?: string } | null)?.type === "microscopic"
+      ? "microscopic"
+      : "character";
 
   const { data: assetRow, error: insErr } = await supabase
     .from("assets")
@@ -356,7 +452,10 @@ async function generateOneImage(args: {
       beat_id: beat.id,
       kind: "image",
       status: "processing",
-      provider: env.IMAGE_PROVIDER === "fal" ? "fal:nano-banana-2" : "google:gemini-2.5-flash-image",
+      provider:
+        env.IMAGE_PROVIDER === "fal"
+          ? "fal:nano-banana-2"
+          : "google:gemini-2.5-flash-image",
     } satisfies TablesInsert<"assets">)
     .select("id")
     .single();
@@ -365,35 +464,65 @@ async function generateOneImage(args: {
   try {
     const { bytes, mimeType } =
       env.IMAGE_PROVIDER === "fal"
-        ? await generateBeatImageWithFal({ svc, userId, projectId, project, beat, referenceImage, mascotImage })
+        ? await generateBeatImageWithFal({
+            svc,
+            userId,
+            projectId,
+            project,
+            beat,
+            beatType,
+            referenceImage,
+            mascotImage,
+          })
         : await generateBeatImage({
             templateId: project.template_id,
             productName: project.product_name,
-            beat: { label: beat.label, text: beat.text, visual_prompt: beat.visual_prompt },
-            referenceImage,
+            beat: {
+              label: beat.label,
+              text: beat.text,
+              visual_prompt: beat.visual_prompt,
+            },
+            beatType,
+            referenceImage: beatType === "microscopic" ? null : referenceImage,
             mascotImage,
           });
 
     const ext = mimeType.split("/")[1] ?? "png";
     const path = `${userId}/${projectId}/images/${beat.id}-ai.${ext}`;
-    const { error: upErr } = await svc.storage.from("media").upload(path, bytes, {
-      contentType: mimeType,
-      upsert: true,
-    });
+    const { error: upErr } = await svc.storage
+      .from("media")
+      .upload(path, bytes, {
+        contentType: mimeType,
+        upsert: true,
+      });
     if (upErr) throw upErr;
 
-    const { data: signed } = await svc.storage.from("media").createSignedUrl(path, 60 * 60 * 24);
+    const { data: signed } = await svc.storage
+      .from("media")
+      .createSignedUrl(path, 60 * 60 * 24);
 
     await supabase
       .from("assets")
-      .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
+      .update({
+        status: "ready",
+        storage_path: path,
+        url: signed?.signedUrl ?? null,
+      })
       .eq("id", assetRow.id);
     console.log("[generateBeatImages] ok", { beat: beat.idx, path });
 
     try {
-      await chargeCredits({ userId, delta: COST.imagePerBeat, reason: `image:${beat.idx}`, projectId });
+      await chargeCredits({
+        userId,
+        delta: COST.imagePerBeat,
+        reason: `image:${beat.idx}`,
+        projectId,
+      });
     } catch (e) {
-      console.warn("[generateBeatImages] credit charge failed", { beat: beat.idx, err: e });
+      console.warn("[generateBeatImages] credit charge failed", {
+        beat: beat.idx,
+        err: e,
+      });
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -401,7 +530,10 @@ async function generateOneImage(args: {
       .from("assets")
       .update({ status: "failed", error: msg })
       .eq("id", assetRow.id);
-    console.error("[generateBeatImages] failed", { beat: beat.idx, error: msg });
+    console.error("[generateBeatImages] failed", {
+      beat: beat.idx,
+      error: msg,
+    });
     throw e;
   }
 }
