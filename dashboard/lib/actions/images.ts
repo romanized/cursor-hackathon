@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
 import { generateBeatImage } from "@/lib/providers/google";
+import { chargeCredits, COST } from "@/lib/credits";
 import type { TablesInsert } from "@/lib/db";
 
 async function requireUser() {
@@ -191,6 +192,12 @@ async function generateOneImage(args: {
       .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
       .eq("id", assetRow.id);
     console.log("[generateBeatImages] ok", { beat: beat.idx, path });
+
+    try {
+      await chargeCredits({ userId, delta: COST.imagePerBeat, reason: `image:${beat.idx}`, projectId });
+    } catch (e) {
+      console.warn("[generateBeatImages] credit charge failed", { beat: beat.idx, err: e });
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase

@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { chargeCredits, COST } from "@/lib/credits";
+// ponytail: per-action billing replaces the old hook/full upfront charge.
+// saveScript no longer touches credits — the Step 3 spend is the
+// generateScriptForProject AI call itself.
 import { generateScript as runGenerateScript } from "@/lib/providers/google";
 import type { TablesInsert, TablesUpdate } from "@/lib/db";
 
@@ -73,25 +76,7 @@ export async function saveScript(
     beats: Array<{ label: string; text: string; visual_prompt: string }>;
   },
 ) {
-  const { supabase, user } = await requireUser();
-
-  // Read project to know runtime for credit cost + to avoid charging twice.
-  const { data: project, error: pErr } = await supabase
-    .from("projects")
-    .select("runtime, current_step")
-    .eq("id", projectId)
-    .single();
-  if (pErr || !project) throw pErr ?? new Error("project not found");
-
-  // Charge credits only the first time we advance past step 3.
-  if (project.current_step < 4) {
-    await chargeCredits({
-      userId: user.id,
-      delta: COST[project.runtime],
-      reason: `script:${project.runtime}`,
-      projectId,
-    });
-  }
+  const { supabase } = await requireUser();
 
   // Replace beats wholesale (delete + insert keyed on (project_id, idx)).
   const { error: delErr } = await supabase.from("beats").delete().eq("project_id", projectId);
@@ -121,11 +106,10 @@ export async function saveScript(
 
 /**
  * Generate the voiceover script + beats from the saved brief using Gemini 2.5
- * Flash. Writes straight to the draft (does NOT charge credits — charging
- * still happens on Save & continue from Step 3).
+ * Flash. Charges `COST.script` once Gemini returns a usable result.
  */
 export async function generateScriptForProject(projectId: string) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const { data: project, error: pErr } = await supabase
     .from("projects")
@@ -183,6 +167,12 @@ export async function generateScriptForProject(projectId: string) {
     .update({ voiceover_script: result.voiceover_script || null })
     .eq("id", projectId);
   if (upErr) throw upErr;
+
+  try {
+    await chargeCredits({ userId: user.id, delta: COST.script, reason: "script", projectId });
+  } catch (e) {
+    console.warn("[generateScriptForProject] credit charge failed", e);
+  }
 
   revalidatePath(`/create/${projectId}`, "layout");
   return { beats: result.beats.length, scriptChars: result.voiceover_script.length };

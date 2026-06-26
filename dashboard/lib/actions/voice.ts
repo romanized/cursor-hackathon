@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
 import { synthesizeVoiceover } from "@/lib/providers/elevenlabs";
+import { chargeCredits, COST } from "@/lib/credits";
 import type { TablesInsert } from "@/lib/db";
 
 async function requireUser() {
@@ -68,6 +69,12 @@ export async function generateVoiceover(projectId: string) {
       .from("assets")
       .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
       .eq("id", asset.id);
+
+    try {
+      await chargeCredits({ userId: user.id, delta: COST.voiceover, reason: "voiceover", projectId });
+    } catch (e) {
+      console.warn("[generateVoiceover] credit charge failed", e);
+    }
 
     // First completion → advance furthest reachable step.
     await supabase

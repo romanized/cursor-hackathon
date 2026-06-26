@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
 import { generateVideoFromImage } from "@/lib/providers/video";
+import { chargeCredits, costForClip } from "@/lib/credits";
+import { env } from "@/lib/env";
 import type { TablesInsert } from "@/lib/db";
 
 async function requireUser() {
@@ -164,6 +166,17 @@ async function generateOneClip(args: {
       .update({ status: "ready", storage_path: path, url: signed?.signedUrl ?? null })
       .eq("id", assetRow.id);
     console.log("[generateMotionClips] ok", { beat: img.beat_id, path });
+
+    try {
+      await chargeCredits({
+        userId,
+        delta: costForClip(env.VIDEO_PROVIDER),
+        reason: `clip:${env.VIDEO_PROVIDER}`,
+        projectId,
+      });
+    } catch (e) {
+      console.warn("[generateMotionClips] credit charge failed", { beat: img.beat_id, err: e });
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { scrapeUrl } from "@/lib/providers/apify";
 import { inferBrief } from "@/lib/providers/google";
+import { chargeCredits, COST } from "@/lib/credits";
 import type { TablesInsert, TablesUpdate } from "@/lib/db";
 
 async function requireUser() {
@@ -65,6 +66,14 @@ export async function scrapeAndAttach(projectId: string, url: string) {
       .eq("id", product.id);
     if (updErr) console.error("[products.scrapeAndAttach] product update failed", updErr);
 
+    // Charge only after Apify returns usable data. Best-effort: a credit
+    // failure here should not roll back the scrape.
+    try {
+      await chargeCredits({ userId: user.id, delta: COST.scrape, reason: "scrape", projectId });
+    } catch (e) {
+      console.warn("[products.scrapeAndAttach] credit charge failed", e);
+    }
+
     // Seed brief fields on the project — only those still empty, so we never
     // stomp on user edits. Brief inference is best-effort: a Gemini failure
     // should not fail the whole scrape.
@@ -76,6 +85,11 @@ export async function scrapeAndAttach(projectId: string, url: string) {
         issues: inferred.customer_issues.length,
         benefits: inferred.benefits.length,
       });
+      try {
+        await chargeCredits({ userId: user.id, delta: COST.briefInference, reason: "brief_inference", projectId });
+      } catch (e) {
+        console.warn("[products.scrapeAndAttach] brief credit charge failed", e);
+      }
     } catch (e) {
       console.warn("[products.scrapeAndAttach] brief inference failed", e);
     }
