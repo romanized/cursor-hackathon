@@ -56,8 +56,9 @@ export default async function AssembleStep({
           Stitch it <Accent>together.</Accent>
         </h1>
         <p className="text-muted max-w-xl">
-          FFmpeg stitches every beat clip and bakes the voiceover audio straight
-          into a single 9:16 MP4. Takes 5–20 seconds.
+          FFmpeg stitches every beat clip and muxes the voiceover into a single
+          9:16 MP4. With captions on, VEED via Fal styles and burns them in
+          (~10–30s extra).
         </p>
       </header>
 

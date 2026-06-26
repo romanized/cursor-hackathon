@@ -12,6 +12,13 @@ import { SegmentToggle } from "@/components/ui/toggle";
 import { CreditPill } from "@/components/ui/credit-pill";
 import { scrapeAndAttach } from "@/lib/actions/products";
 import { saveBrief } from "@/lib/actions/projects";
+import {
+  DEFAULT_SUBTITLE_PRESET,
+  parseSubtitlePreset,
+  VEED_SUBTITLE_PRESET_GROUPS,
+  type VeedSubtitlePreset,
+} from "@/lib/media/subtitle-presets";
+import type { Json } from "@/lib/db";
 
 type Project = {
   product_id: string | null;
@@ -21,6 +28,7 @@ type Project = {
   benefits: string[];
   runtime: "hook" | "full";
   captions: boolean;
+  meta: Json;
 };
 
 type Product = {
@@ -55,6 +63,14 @@ export function ProductBrief({
   const [benefits, setBenefits] = useState(project.benefits.join("\n"));
   const [runtime, setRuntime] = useState<"hook" | "full">(project.runtime);
   const [captions, setCaptions] = useState(project.captions);
+  const [captionPreset, setCaptionPreset] = useState<VeedSubtitlePreset>(() => {
+    const meta = project.meta;
+    const raw =
+      meta && typeof meta === "object" && !Array.isArray(meta)
+        ? (meta as Record<string, unknown>).caption_preset
+        : undefined;
+    return parseSubtitlePreset(raw);
+  });
 
   const images = Array.isArray(product?.images) ? (product!.images as string[]) : [];
 
@@ -82,6 +98,7 @@ export function ProductBrief({
           benefits,
           runtime,
           captions,
+          caption_preset: captionPreset,
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -171,6 +188,29 @@ export function ProductBrief({
             </label>
             <CreditPill amount={runtime === "hook" ? 1 : 3} className="ml-auto" />
           </div>
+          {captions && (
+            <div className="mt-4 flex flex-col gap-2">
+              <span className="text-xs text-muted">Caption style</span>
+              <select
+                value={captionPreset}
+                onChange={(e) => setCaptionPreset(parseSubtitlePreset(e.target.value))}
+                className="h-11 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-elev)] px-3 text-sm outline-none"
+              >
+                {VEED_SUBTITLE_PRESET_GROUPS.map((group) => (
+                  <optgroup key={group.tier} label={group.label}>
+                    {group.presets.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-xs text-faint">
+                Styled via VEED on Fal. Default: {DEFAULT_SUBTITLE_PRESET}.
+              </p>
+            </div>
+          )}
         </Card>
 
         <div className="flex items-center justify-end gap-3">
