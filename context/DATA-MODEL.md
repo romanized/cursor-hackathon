@@ -26,6 +26,7 @@ anchored to **1 credit ≈ $0.01** of vendor spend:
 | Gemini brief inference | 2 | `brief_inference` |
 | Gemini script + beats | 8 | `script` |
 | Gemini image (per beat) | 15 | `image:<idx>` |
+| Gemini mascot portrait | 15 | `mascot` |
 | ElevenLabs voiceover (per beat) | 10 | `voiceover:<idx>` |
 | Replicate Kling 2.1 clip | 40 | `clip:replicate-kling` |
 | Replicate LTX-Video clip | 10 | `clip:replicate-ltx` |

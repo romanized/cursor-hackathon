@@ -67,14 +67,19 @@ export async function generateVideoFromImageKling(input: {
     promptChars: input.prompt.length,
   });
 
+  // Kling 2.6 Pro: industry pick for character/face consistency in 9:16
+  // image-to-video. ~$0.25 / 5s clip on Replicate, 1080p, 24fps.
+  // - `aspect_ratio` is ignored when `start_image` is set (it inherits).
+  // - `generate_audio` defaults to TRUE — we disable it so the ElevenLabs
+  //   voiceover we already render is the only audio in the final video.
   const output = await runWithRetry(() =>
-    client().run("kwaivgi/kling-v2.1", {
+    client().run("kwaivgi/kling-v2.6", {
       input: {
         prompt: input.prompt,
         start_image: input.imageUrl,
-        mode: "standard",         // 720p, 24fps; "pro" is 1080p but ~5x cost
         duration,
-        negative_prompt: "low quality, blurry, distorted, warped, watermark, text",
+        generate_audio: false,
+        negative_prompt: "low quality, blurry, distorted, warped, watermark, text, extra limbs, deformed face",
       },
     }),
   );

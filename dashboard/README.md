@@ -41,8 +41,9 @@ supports email OTP and Google (Google needs the Supabase provider enabled).
   - **Step 4** — `google.generateBeatImage()`: `gemini-2.5-flash-image`
     (Nano-banana), optionally seeded with the scraped product image.
   - **Step 6** — `video.generateVideoFromImage()` dispatches on
-    `VIDEO_PROVIDER`. Default `replicate-kling` runs Kling v2.1 Standard
-    on Replicate (720p 24fps, ~$0.25 / 5s clip). `replicate-ltx` is the
+    `VIDEO_PROVIDER`. Default `replicate-kling` runs Kling v2.6 Pro
+    on Replicate (1080p 24fps, ~$0.25 / 5s clip, best-in-class face/character
+    consistency). `replicate-ltx` is the
     cheap fallback (~$0.05 / 5s, visibly worse). `google-veo` runs Veo 3
     Fast (~$0.50–$1 / 4s, free key throttled to 2 RPM / 9 RPD).
     `lib/providers/replicate.ts` carries a per-process FIFO gate +

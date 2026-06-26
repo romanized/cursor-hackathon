@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight02Icon, ImageAdd01Icon, SparklesIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight02Icon, ImageAdd01Icon, RefreshIcon, SparklesIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
-import { generateBeatImages, recordImageAsset } from "@/lib/actions/images";
+import { generateBeatImages, generateMascot, recordImageAsset } from "@/lib/actions/images";
 import { advanceTo } from "@/lib/actions/projects";
 import { useAssetsRealtime, type RealtimeAsset } from "@/lib/hooks/use-assets-realtime";
 
@@ -19,19 +19,23 @@ export function ImagesEditor({
   userId,
   beats,
   assets: initialAssets,
+  mascotUrl: initialMascotUrl,
 }: {
   projectId: string;
   userId: string;
   beats: Beat[];
   assets: Asset[];
+  mascotUrl: string | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
   const assets = useAssetsRealtime<Asset>(projectId, "image", initialAssets);
+  const [mascotUrl, setMascotUrl] = useState(initialMascotUrl);
   const [busyBeat, setBusyBeat] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [advancing, startAdvance] = useTransition();
   const [generating, startGenerate] = useTransition();
+  const [mascotPending, startMascot] = useTransition();
 
   // Keep only the latest asset row per beat (the server lists them all so we
   // can show processing/failed states; pick by priority: ready > processing > failed).
@@ -66,6 +70,19 @@ export function ImagesEditor({
     }
   }
 
+  function runMascot() {
+    setError(null);
+    startMascot(async () => {
+      try {
+        const result = await generateMascot(projectId);
+        if (result.url) setMascotUrl(result.url);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  }
+
   function generateAll() {
     setError(null);
     startGenerate(async () => {
@@ -87,21 +104,47 @@ export function ImagesEditor({
 
   return (
     <div className="flex flex-col gap-5">
+      <Card className="flex flex-wrap items-center gap-5 p-5">
+        <div className="relative aspect-[9/16] w-28 shrink-0 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-elev)]">
+          {mascotUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={mascotUrl} alt="Project mascot" className="size-full object-cover" />
+          ) : (
+            <div className="flex size-full items-center justify-center text-xs text-faint">No mascot</div>
+          )}
+        </div>
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2">
+          <span className="overline-muted">Mascot</span>
+          <p className="text-sm text-muted">
+            One canonical character for the whole video. Beat images reuse this portrait so the mascot stays consistent across every scene.
+          </p>
+          {mascotUrl && (
+            <p className="text-xs text-faint">Re-roll the mascot if you change template — then regenerate beat images.</p>
+          )}
+        </div>
+        <Button intent={mascotUrl ? "secondary" : "primary"} onClick={runMascot} disabled={mascotPending}>
+          <HugeiconsIcon icon={mascotUrl ? RefreshIcon : SparklesIcon} size={16} strokeWidth={1.6} />
+          {mascotPending ? "Generating…" : mascotUrl ? "Re-roll mascot" : "Generate mascot"}
+        </Button>
+      </Card>
+
       <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
         <div className="flex flex-col gap-1">
-          <span className="overline-muted">Generate with AI</span>
+          <span className="overline-muted">Beat images</span>
           <p className="text-sm text-muted">
-            Nano-banana generates one image per beat using the scraped product as a reference. You can still upload your own to override any beat.
+            Nano-banana generates one scene per beat using the mascot + scraped product as references. Upload your own to override any beat.
           </p>
         </div>
         <Button
           intent="primary"
           onClick={generateAll}
-          disabled={generating || !beats.length || allReady}
+          disabled={generating || !beats.length || allReady || !mascotUrl}
         >
           <HugeiconsIcon icon={SparklesIcon} size={16} strokeWidth={1.6} />
           {generating
             ? `Generating ${pendingCount}…`
+            : !mascotUrl
+              ? "Generate mascot first"
             : allReady
               ? "All beats covered"
               : `Generate ${pendingCount} image${pendingCount === 1 ? "" : "s"}`}
@@ -114,7 +157,7 @@ export function ImagesEditor({
           const busy = busyBeat === b.id || existing?.status === "processing" || (generating && existing?.status !== "ready");
           return (
             <Card key={b.id} className="overflow-hidden">
-              <label className="relative block aspect-square cursor-pointer">
+              <label className="relative block aspect-[9/16] cursor-pointer">
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"

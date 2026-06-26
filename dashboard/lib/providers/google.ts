@@ -1,6 +1,12 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
 import { env, requireServer } from "@/lib/env";
+import { fitTo916 } from "@/lib/media/fit-916";
+import { loadTemplateReferenceImage } from "@/lib/references/template-mascots";
+
+const REEL_ASPECT = "9:16" as const;
+const REEL_FRAMING =
+  "MUST be vertical portrait 9:16 aspect ratio (tall narrow frame, 720×1280). NOT square, NOT landscape.";
 
 // gemini-2.5-flash-image (a.k.a. "Nano-banana") — generous free tier in AI Studio.
 // Per-template style hints. Keys match templates.id from the seed migration.
@@ -19,7 +25,7 @@ const STYLE: Record<string, string> = {
   ai_streamer_clip:
     "Stylised gaming streamer webcam capture of a generic young creator on stream, headset on, mid-reaction. Behind them: a neon RGB lit bedroom-studio with LED strips, plants, monitor glow. Faux on-screen overlay (subscribe banner, donation alert) shown around the edges. Subtle chromatic aberration, gentle motion blur, high-end webcam quality. Vertical 9:16 framing. PG-rated, no real-person likeness.",
   pibble_dog:
-    "Soft 3D Pixar-style render of a friendly cartoon pitbull (pibble) mascot with a big blocky head, expressive eyes, and a goofy tongue-out smile. Sitting or standing upright, holding and proudly showing the product. Warm cinematic lighting, soft global illumination, shallow depth of field, clean pastel studio backdrop. Hyperdetailed, plush-toy quality. Vertical 9:16 framing. PG-rated, wholesome, never aggressive.",
+    "Feature the exact cream-coloured French-bulldog-style puppy mascot from the reference — same soft off-white fur, same big dark eyes, dark nose, rounded upright ears, chubby belly with belly button, playful upright pose energy. Place this puppy in the scene interacting with or showing the product per the beat. Whimsical Pixar-quality 3D render, soft cinematic lighting, magical pastel sky with subtle sparkles optional. MUST remain recognisably the same character. Vertical 9:16 framing.",
 };
 
 // Last-resort fallback when the styled prompt is blocked. Generic product
@@ -27,13 +33,31 @@ const STYLE: Record<string, string> = {
 const SAFE_STYLE =
   "Premium product photography of the supplied item on a clean light backdrop. Soft studio lighting, shallow depth of field, vertical 9:16 framing. No people, no logos, no text overlays.";
 
+// Canonical mascot portrait — same keys as STYLE / templates.id. Character
+// only, no product, neutral pose so it works as a reference across beats.
+const MASCOT_STYLE: Record<string, string> = {
+  skeleton_ai:
+    "Cinematic 3D CGI render of a stylised friendly cartoon mascot with a smooth white bone-like body and big expressive cartoon eyes. Full character visible, neutral friendly pose facing camera, arms relaxed. Clean dark teal studio backdrop, subtle cyan rim light. Vertical 9:16 portrait. PG-rated, playful, not scary.",
+  cartoon:
+    "Vibrant 2D cartoon mascot in a flat, bold suburban-comedy animation style (generic, no real character). Thick black outlines, exaggerated proportions, friendly expression, full character facing camera. Vertical 9:16 portrait.",
+  cgi_3d:
+    "Photoreal 3D CGI mascot character, full body visible, neutral friendly pose facing camera. Soft global illumination, shallow depth of field, cinema-quality render. Vertical 9:16 portrait.",
+  ai_streamer_clip:
+    "Stylised young gaming streamer mascot, headset on, friendly mid-smile, facing webcam. Neon RGB bedroom-studio backdrop, LED strips, monitor glow. Vertical 9:16 portrait. PG-rated, no real-person likeness.",
+  pibble_dog:
+    "Whimsical high-quality 3D Pixar-style cream French-bulldog puppy mascot: soft off-white velvety fur, large glossy dark eyes, dark grey nose, rounded upright ears, wide happy smile, chubby belly with belly button. Playful upright pose on a shimmering rainbow with pastel sunset clouds and soft sparkles. Full character centered. Vertical 9:16 portrait.",
+};
+
 const ai = () => new GoogleGenAI({ apiKey: requireServer("GOOGLE_API_KEY") });
 
 export type BeatImageInput = {
   templateId: string | null;
   productName: string | null;
   beat: { label: string | null; text: string; visual_prompt: string | null };
+  /** Scraped product photo — keeps the product identifiable across beats. */
   referenceImage?: { bytes: Buffer; mimeType: string } | null;
+  /** Canonical mascot portrait — keeps the character design identical across beats. */
+  mascotImage?: { bytes: Buffer; mimeType: string } | null;
 };
 
 /**
@@ -41,6 +65,46 @@ export type BeatImageInput = {
  * If a reference image (the scraped product) is provided it is sent as input
  * so the product itself stays visually consistent across beats.
  */
+/** One canonical mascot portrait for the project — no product, no beat scene. */
+export async function generateMascotImage(input: {
+  templateId: string | null;
+}): Promise<{ bytes: Buffer; mimeType: string }> {
+  const ref = await loadTemplateReferenceImage(input.templateId);
+  const style = (input.templateId && MASCOT_STYLE[input.templateId]) || MASCOT_STYLE.skeleton_ai;
+
+  const prompt = ref
+    ? [
+        style,
+        "The supplied image is the character reference. Generate a NEW portrait of this EXACT same character — same cream fur, same French-bulldog puppy proportions, same big eyes, dark nose, upright ears, chubby belly, same whimsical 3D Pixar-style look — recomposed for a vertical reel. You may adjust pose and simplify the background but the character must be instantly recognisable as the same puppy from the reference.",
+        REEL_FRAMING,
+        "Single character portrait only. No product, no props, no text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
+      ].join("\n\n")
+    : [
+        style,
+        REEL_FRAMING,
+        "Single character portrait only. No product, no props, no text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
+      ].join("\n\n");
+
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+  if (ref) {
+    parts.push({
+      inlineData: { mimeType: ref.mimeType, data: ref.bytes.toString("base64") },
+    });
+  }
+  parts.push({ text: prompt });
+
+  try {
+    return await runImageGenerate({ parts });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!/PROHIBITED_CONTENT|SAFETY|BLOCKED/.test(msg)) throw e;
+    console.warn("[google.generateMascotImage] retrying with safe fallback", { reason: msg });
+    return await runImageGenerate({
+      parts: [{ text: `${SAFE_STYLE}\n\nFriendly generic cartoon mascot character, full body, neutral pose.` }],
+    });
+  }
+}
+
 export async function generateBeatImage(input: BeatImageInput): Promise<{ bytes: Buffer; mimeType: string }> {
   const style = (input.templateId && STYLE[input.templateId]) || STYLE.skeleton_ai;
   const beatPrompt =
@@ -66,27 +130,62 @@ async function runGenerate(
   style: string,
   beatPrompt: string,
 ): Promise<{ bytes: Buffer; mimeType: string }> {
+  const refLines: string[] = [];
+  if (input.referenceImage) {
+    refLines.push(
+      "The first supplied image is the product — keep it identifiable and consistent in the scene.",
+    );
+  }
+  if (input.mascotImage) {
+    refLines.push(
+      input.referenceImage
+        ? "The second supplied image is the mascot character — keep this exact character design (face, colors, proportions, outfit) identical in every scene."
+        : "The supplied image is the mascot character — keep this exact character design (face, colors, proportions, outfit) identical in every scene.",
+    );
+  }
+
   const prompt = [
     style,
     input.productName ? `Featured product: ${input.productName}.` : "",
-    input.referenceImage
-      ? "Use the supplied product image as the visual reference — keep the product identifiable and consistent."
-      : "",
+    ...refLines,
     `Scene: ${beatPrompt}`,
+    REEL_FRAMING,
     "No text overlays, no logos, no watermarks. One single image. PG-rated, brand-safe, no real people, no copyrighted characters.",
   ].filter(Boolean).join("\n\n");
 
-  const contents: unknown[] = input.referenceImage
-    ? [
-        { inlineData: { mimeType: input.referenceImage.mimeType, data: input.referenceImage.bytes.toString("base64") } },
-        { text: prompt },
-      ]
-    : [{ text: prompt }];
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+  if (input.referenceImage) {
+    parts.push({
+      inlineData: {
+        mimeType: input.referenceImage.mimeType,
+        data: input.referenceImage.bytes.toString("base64"),
+      },
+    });
+  }
+  if (input.mascotImage) {
+    parts.push({
+      inlineData: {
+        mimeType: input.mascotImage.mimeType,
+        data: input.mascotImage.bytes.toString("base64"),
+      },
+    });
+  }
+  parts.push({ text: prompt });
 
+  return runImageGenerate({ parts });
+}
+
+async function runImageGenerate(args: {
+  parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
+}): Promise<{ bytes: Buffer; mimeType: string }> {
   const res = await ai().models.generateContent({
     model: "gemini-2.5-flash-image",
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    contents: contents as any,
+    contents: args.parts as any,
+    config: {
+      // ponytail: API hint when supported; fitTo916() below is the hard guarantee.
+      imageConfig: { aspectRatio: REEL_ASPECT },
+    },
   });
 
   const candidate = res.candidates?.[0];
@@ -94,17 +193,16 @@ async function runGenerate(
   for (const part of candidate?.content?.parts ?? []) {
     const inline = (part as { inlineData?: { data?: string; mimeType?: string } }).inlineData;
     if (inline?.data) {
-      return {
+      const raw = {
         bytes: Buffer.from(inline.data, "base64"),
         mimeType: inline.mimeType || "image/png",
       };
+      return fitTo916(raw.bytes, raw.mimeType);
     }
     const t = (part as { text?: string }).text;
     if (t) textParts.push(t);
   }
 
-  // No image part — log everything we got back so the caller can see why
-  // (SAFETY block, RECITATION, model returning a refusal as text, etc.).
   const diag = {
     promptFeedback: res.promptFeedback ?? null,
     finishReason: candidate?.finishReason ?? null,

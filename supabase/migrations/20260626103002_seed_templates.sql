@@ -8,7 +8,7 @@ values
   ('cartoon',             'Cartoon',             'video', 'active', 'Simpsons-style cartoon scenes.',                                                       false, 20),
   ('cgi_3d',              '3D CGI',              'video', 'active', 'Photoreal 3D CGI character.',                                                          false, 30),
   ('ai_streamer_clip',    'AI Streamer',         'video', 'active', 'Streamer webcam vibe with neon RGB lighting and the product on stream.',              false, 40),
-  ('pibble_dog',          'Pibble Dog',          'video', 'active', 'Friendly cartoon pitbull mascot in soft 3D pixar-style render, holding the product.', false, 50)
+  ('pibble_dog',          'Pibble Dog',          'video', 'active', 'Whimsical rainbow pibble — 3D Frenchie puppy from your reference in every scene.', false, 50)
 on conflict (id) do update set
   name        = excluded.name,
   kind        = excluded.kind,

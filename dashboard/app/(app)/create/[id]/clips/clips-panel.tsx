@@ -15,8 +15,8 @@ type VideoProvider = "replicate-kling" | "replicate-ltx" | "google-veo";
 
 const PROVIDER_COPY: Record<VideoProvider, { label: string; blurb: string }> = {
   "replicate-kling": {
-    label: "Generate motion clips with Kling 2.1",
-    blurb: "Kling v2.1 Standard on Replicate, vertical 9:16, 720p / 24fps, 5s per clip. Each clip costs ~$0.25; renders take ~1–3 min per beat. Free Replicate tier (<$5 credit) is throttled to 6 RPM, so beats render sequentially.",
+    label: "Generate motion clips with Kling 2.6",
+    blurb: "Kling v2.6 Pro on Replicate, vertical 9:16, 1080p / 24fps, 5s per clip. Best-in-class for character/face consistency across cuts. ~$0.25/clip, ~1–3 min per beat. Free Replicate tier (<$5 credit) is throttled to 6 RPM, so beats render sequentially.",
   },
   "replicate-ltx": {
     label: "Generate motion clips with LTX-Video",
