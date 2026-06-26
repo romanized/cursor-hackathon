@@ -47,6 +47,22 @@ const MASCOT_STYLE: Record<string, string> = {
     "Whimsical high-quality 3D Pixar-style cream French-bulldog puppy mascot: soft off-white velvety fur, large glossy dark eyes, dark grey nose, rounded upright ears, wide happy smile, chubby belly with belly button. Playful upright pose on a shimmering rainbow with pastel sunset clouds and soft sparkles. Full character centered. Vertical 9:16 portrait.",
 };
 
+// Render/look ONLY — no character nouns. Used when a mascot reference image is
+// supplied so the text doesn't describe a *different* generic character that
+// competes with the reference (the cause of every beat inventing a new look).
+export const RENDER_STYLE: Record<string, string> = {
+  skeleton_ai:
+    "Cinematic 3D CGI render, premium product-ad lighting, soft shadows, clean dark teal studio backdrop, subtle cyan rim light, hyperdetailed octane-style finish.",
+  cartoon:
+    "Vibrant 2D cartoon illustration, flat bold saturated colors, thick black outlines, dynamic comic-panel composition.",
+  cgi_3d:
+    "Photoreal 3D CGI render, soft global illumination, shallow depth of field, cinema-quality lighting.",
+  ai_streamer_clip:
+    "Stylised gaming-stream webcam look, neon RGB bedroom-studio, LED strips, monitor glow, subtle chromatic aberration, high-end webcam quality.",
+  pibble_dog:
+    "Whimsical Pixar-quality 3D render, soft cinematic lighting, magical pastel palette with optional soft sparkles.",
+};
+
 const ai = () => new GoogleGenAI({ apiKey: requireServer("GOOGLE_API_KEY") });
 
 // gemini-2.5-flash-image only accepts these raster input types. Scraped product
@@ -120,25 +136,32 @@ export async function generateBeatImage(input: BeatImageInput): Promise<{ bytes:
     input.beat.visual_prompt?.trim() ||
     `Visualize this voiceover beat: "${input.beat.text}"`;
 
-  // Microscopic beats are pure mechanism CGI — no character, no template style,
-  // no product/mascot reference. The visual_prompt already carries the full
-  // locked CGI style tokens, so we feed it on its own.
+  const hasMascot = Boolean(asSupportedRef(input.mascotImage));
+
+  // Microscopic = mechanism CGI. Drop the product ref (the scene is abstract)
+  // but KEEP the mascot — every image must feature the character. It appears as
+  // a small cameo so the macro mechanism stays the hero.
   if (input.beatType === "microscopic") {
-    const micInput: BeatImageInput = { ...input, referenceImage: null, mascotImage: null };
+    const micInput: BeatImageInput = { ...input, referenceImage: null };
     try {
-      return await runGenerate(micInput, "", beatPrompt);
+      return await runGenerate(micInput, "", beatPrompt, "cameo");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (!/PROHIBITED_CONTENT|SAFETY|BLOCKED/.test(msg)) throw e;
       console.warn("[google.generateBeatImage] microscopic retry with safe fallback", { reason: msg });
-      return await runGenerate(micInput, SAFE_STYLE, "Clean studio product shot. Centered, neutral background.");
+      return await runGenerate({ ...micInput, mascotImage: null }, SAFE_STYLE, "Clean studio product shot. Centered, neutral background.", "lock");
     }
   }
 
-  const style = (input.templateId && STYLE[input.templateId]) || STYLE.skeleton_ai;
+  // With a mascot reference we use a character-FREE render style so the prompt
+  // never describes a competing generic character. Without one (rare — mascot
+  // download failed), fall back to the full STYLE that does describe a character.
+  const style = hasMascot
+    ? (input.templateId && RENDER_STYLE[input.templateId]) || RENDER_STYLE.cgi_3d
+    : (input.templateId && STYLE[input.templateId]) || STYLE.skeleton_ai;
 
   try {
-    return await runGenerate(input, style, beatPrompt);
+    return await runGenerate(input, style, beatPrompt, "lock");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // PROHIBITED_CONTENT = a phrase in the prompt tripped the image safety
@@ -147,7 +170,7 @@ export async function generateBeatImage(input: BeatImageInput): Promise<{ bytes:
     // trigger almost always lives.
     if (!/PROHIBITED_CONTENT|SAFETY|BLOCKED/.test(msg)) throw e;
     console.warn("[google.generateBeatImage] retrying with safe fallback", { reason: msg });
-    return await runGenerate(input, SAFE_STYLE, "Clean studio product shot. Centered, neutral background.");
+    return await runGenerate(input, SAFE_STYLE, "Clean studio product shot. Centered, neutral background.", "lock");
   }
 }
 
@@ -155,29 +178,33 @@ async function runGenerate(
   input: BeatImageInput,
   style: string,
   beatPrompt: string,
+  charMode: "lock" | "cameo" = "lock",
 ): Promise<{ bytes: Buffer; mimeType: string }> {
   const productRef = asSupportedRef(input.referenceImage);
   const mascotRef = asSupportedRef(input.mascotImage);
 
-  const refLines: string[] = [];
-  if (productRef) {
-    refLines.push(
-      "The first supplied image is the product — keep it identifiable and consistent in the scene.",
+  // The mascot instruction leads the prompt — reference image dominates so the
+  // SAME character appears in every beat instead of a new one each time.
+  const lead: string[] = [];
+  if (mascotRef) {
+    const which = productRef ? "second" : "first";
+    lead.push(
+      charMode === "cameo"
+        ? `The ${which} supplied image is the brand MASCOT. Include this EXACT character somewhere in the frame as a smaller cameo (observing or gesturing toward the visualization) — identical face, colors, outfit and proportions, do NOT redesign it. The macro mechanism stays the main subject.`
+        : `CHARACTER LOCK — the ${which} supplied image is the brand MASCOT and is the main subject. Reproduce this EXACT character: identical face, head, body shape, colors, outfit and proportions. Do NOT redesign, restyle, age, recolor or swap the character — it must be unmistakably the same character as the reference image in every beat.`,
     );
   }
-  if (mascotRef) {
-    refLines.push(
-      productRef
-        ? "The second supplied image is the mascot character — keep this exact character design (face, colors, proportions, outfit) identical in every scene."
-        : "The supplied image is the mascot character — keep this exact character design (face, colors, proportions, outfit) identical in every scene.",
+  if (productRef) {
+    lead.push(
+      "The first supplied image is the product — keep it identifiable and consistent in the scene.",
     );
   }
 
   const prompt = [
-    style,
-    input.productName ? `Featured product: ${input.productName}.` : "",
-    ...refLines,
+    ...lead,
     `Scene: ${beatPrompt}`,
+    input.productName ? `Featured product: ${input.productName}.` : "",
+    style ? `Style and lighting: ${style}` : "",
     REEL_FRAMING,
     "No text overlays, no logos, no watermarks. One single image. PG-rated, brand-safe, no real people, no copyrighted characters.",
   ].filter(Boolean).join("\n\n");
@@ -373,9 +400,9 @@ export type ScriptInput = {
 
 export async function generateScript(input: ScriptInput): Promise<GeneratedScript> {
   const isHook = input.runtime === "hook";
-  const runtimeSeconds = isHook ? 20 : 60;
+  const runtimeSeconds = isHook ? 28 : 70;
   const beatRange = isHook ? "6 to 8" : "10 to 14";
-  const wordTarget = isHook ? "45-55 words" : "130-150 words";
+  const wordTarget = isHook ? "70-90 words" : "175-210 words";
 
   const character =
     (input.templateId && CHARACTER[input.templateId]) || CHARACTER.skeleton_ai;
@@ -414,8 +441,9 @@ export async function generateScript(input: ScriptInput): Promise<GeneratedScrip
     `4. Payoff (final beat, "character", role payoff): the character restored — hopeful, curious, or thriving.`,
     ``,
     `VOICE-OVER RULES`,
-    `- Hook lands in the first 1-2 seconds: pattern-interrupt, blunt claim, or question. Direct-address UGC tone: casual, punchy, contractions, short sentences. NO corporate voice.`,
+    `- Hook lands in the first 1-2 seconds: pattern-interrupt, blunt claim, or question. Direct-address UGC tone: casual, punchy, contractions. NO corporate voice.`,
     `- Pace ~2-2.5 words/sec → total voiceover_script ≈ ${wordTarget}. The drama lives in the VISUALS; the VO stays believably casual over the chaos.`,
+    `- Each beat's vo_line is a COMPLETE spoken sentence of roughly 12-20 words that stands on its own when read aloud. Do NOT split a single sentence across beats or leave dangling fragments ("...just sounds like a"). Every line is a full thought.`,
     isHook
       ? `- HOOK VARIANT shape (do this): (a) pain stack "If you [pain 1], [pain 2], or [pain 3]—", (b) reframe "It's probably not because [self-blame the audience assumes]—", (c) principle "[the activity] just needs [the core mechanism, described generically] to actually work." NO brand name, NO call-to-action — the tease IS the hook.`
       : `- FULL AD: include a product reveal (name the product + its one mechanism) and a closing SOFT CTA ("link's right there").`,
@@ -425,7 +453,7 @@ export async function generateScript(input: ScriptInput): Promise<GeneratedScrip
     `- microscopic beats MUST carry ALL these locked style tokens: "A 3D rendered CGI visualization of [the mechanism] at extreme macro scale, [what it's doing]. Dark moody environment — deep black, dark teal. Bioluminescent glow: soft greens, teals, neon edges. [structure] provides scale. Volumetric fog, dramatic rim/backlit lighting. Clean CGI medical visualization style. 9:16 vertical composition."`,
     ``,
     `OUTPUT`,
-    `- ${beatRange} beats. Each beat: type, role, vo_line, duration_seconds (3-4s each, summing to ≈ ${runtimeSeconds}), visual_prompt.`,
+    `- ${beatRange} beats. Each beat: type, role, vo_line, duration_seconds (4-6s each, summing to ≈ ${runtimeSeconds}), visual_prompt.`,
     `- "metaphor": one line naming the peril the character endures (real or absurdist per register).`,
     `- "voiceover_script": the full spoken text as one block — the beats' vo_line in order must reconstruct it.`,
     `- Never invent unverifiable factual/medical claims; only dramatize what the brief supports.`,

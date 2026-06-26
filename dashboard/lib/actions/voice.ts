@@ -4,9 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
-import { synthesizeVoiceover } from "@/lib/providers/elevenlabs";
+import { synthesizeVoiceover, listVoices, type VoiceOption } from "@/lib/providers/elevenlabs";
 import { chargeCredits, COST } from "@/lib/credits";
-import type { TablesInsert } from "@/lib/db";
+import type { Json, TablesInsert } from "@/lib/db";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -26,9 +26,25 @@ async function requireUser() {
  * asset is preview-only — the final render reads the per-beat files
  * individually, so any join-boundary glitches don't reach the user's MP4.
  */
-export async function generateVoiceover(projectId: string) {
+export async function generateVoiceover(projectId: string, voiceId?: string) {
   const { supabase, user } = await requireUser();
   const svc = createService();
+
+  // Resolve + persist the chosen voice so a reload (and the assemble step)
+  // remembers which voice rendered this project. Falls back to the env default.
+  const { data: project } = await supabase
+    .from("projects")
+    .select("meta")
+    .eq("id", projectId)
+    .single();
+  const meta = (project?.meta ?? {}) as Record<string, Json>;
+  const chosenVoice = voiceId || (typeof meta.voice_id === "string" ? meta.voice_id : undefined);
+  if (voiceId && voiceId !== meta.voice_id) {
+    await supabase
+      .from("projects")
+      .update({ meta: { ...meta, voice_id: voiceId } as Json })
+      .eq("id", projectId);
+  }
 
   const { data: beats, error: bErr } = await supabase
     .from("beats")
@@ -70,7 +86,7 @@ export async function generateVoiceover(projectId: string) {
     narratable.map(async (beat) => {
       const assetId = assetByBeat.get(beat.id)!;
       try {
-        const { mp3, alignment } = await synthesizeVoiceover(beat.text!);
+        const { mp3, alignment } = await synthesizeVoiceover(beat.text!, chosenVoice);
         const path = `${user.id}/${projectId}/voice/${beat.id}.mp3`;
         const { error: upErr } = await svc.storage
           .from("media")
@@ -142,4 +158,10 @@ export async function generateVoiceover(projectId: string) {
     .lt("current_step", 6);
 
   revalidatePath(`/create/${projectId}/voice`);
+}
+
+/** Voices the user can choose from on the Step 5 picker. */
+export async function listAvailableVoices(): Promise<VoiceOption[]> {
+  await requireUser();
+  return listVoices();
 }

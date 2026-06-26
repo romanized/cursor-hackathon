@@ -60,17 +60,18 @@ export async function generateBeatImageFal(input: {
   referenceImageUrls?: string[];
 }): Promise<{ bytes: Buffer; mimeType: string }> {
   ensure();
+  // Reference conditioning (product + mascot) ONLY works on the /edit endpoint —
+  // the base text-to-image model silently drops image_urls, so every beat would
+  // invent a new character. Route to /edit whenever we have reference images.
+  const hasRefs = Boolean(input.referenceImageUrls?.length);
+  const model = hasRefs ? "fal-ai/nano-banana-2/edit" : "fal-ai/nano-banana-2";
   const falInput = {
     prompt: input.prompt,
     aspect_ratio: "9:16" as const,
-    ...(input.referenceImageUrls?.length
-      ? { image_urls: input.referenceImageUrls }
-      : {}),
+    ...(hasRefs ? { image_urls: input.referenceImageUrls } : {}),
   };
 
-  const result = await withRetry(() =>
-    fal.subscribe("fal-ai/nano-banana-2", { input: falInput }),
-  );
+  const result = await withRetry(() => fal.subscribe(model, { input: falInput }));
   const data = result.data as { images?: Array<{ url: string }> };
   const url = data.images?.[0]?.url;
   if (!url) throw new Error("fal nano-banana-2 returned no image URL");

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
-import { generateBeatImage, generateMascotImage } from "@/lib/providers/google";
+import { generateBeatImage, generateMascotImage, RENDER_STYLE } from "@/lib/providers/google";
 import { generateBeatImageFal } from "@/lib/providers/fal";
 import { env } from "@/lib/env";
 import { chargeCredits, COST } from "@/lib/credits";
@@ -348,13 +348,19 @@ async function generateBeatImageWithFal(args: {
   projectId: string;
   project: { template_id: string | null; product_name: string | null };
   beat: { label: string | null; text: string; visual_prompt: string | null };
+  beatType: "character" | "microscopic";
   referenceImage: { bytes: Buffer; mimeType: string } | null;
   mascotImage: { bytes: Buffer; mimeType: string } | null;
 }): Promise<{ bytes: Buffer; mimeType: string }> {
-  const { svc, userId, projectId, project, beat, referenceImage, mascotImage } =
-    args;
+  const { svc, userId, projectId, project, beat, beatType, mascotImage } = args;
+
+  // Microscopic = abstract macro scene → drop the product photo, keep the mascot
+  // as a cameo. Character beats keep both refs.
+  const referenceImage = beatType === "microscopic" ? null : args.referenceImage;
 
   // Upload byte refs → signed URLs fal can fetch. tmp/ so they're easy to GC.
+  // Order matters: product first, mascot second — the prompt refers to them by
+  // position so Nano Banana keeps each one consistent.
   const refUrls: string[] = [];
   async function refToUrl(
     img: { bytes: Buffer; mimeType: string },
@@ -373,20 +379,30 @@ async function generateBeatImageWithFal(args: {
   if (referenceImage) await refToUrl(referenceImage, "product");
   if (mascotImage) await refToUrl(mascotImage, "mascot");
 
+  const which = referenceImage ? "second" : "first";
+  const renderStyle =
+    (project.template_id && RENDER_STYLE[project.template_id]) || RENDER_STYLE.cgi_3d;
   const scene =
     beat.visual_prompt?.trim() ||
     `Visualize this voiceover beat: "${beat.text}"`;
+
+  // The mascot lock leads the prompt so the SAME character appears in every beat
+  // instead of a new one each time.
+  const lead = mascotImage
+    ? beatType === "microscopic"
+      ? `The ${which} supplied image is the brand MASCOT. Include this EXACT character somewhere in the frame as a smaller cameo (observing or gesturing toward the visualization) — identical face, colors, outfit and proportions, do NOT redesign it. The macro mechanism stays the main subject.`
+      : `CHARACTER LOCK — the ${which} supplied image is the brand MASCOT and is the main subject. Reproduce this EXACT character: identical face, head, body shape, colors, outfit and proportions. Do NOT redesign, restyle, recolor or swap the character — it must be unmistakably the same character as the reference image in every beat.`
+    : "";
+
   const prompt = [
-    "UGC-style vertical short-form ad frame.",
-    project.product_name ? `Featured product: ${project.product_name}.` : "",
+    lead,
     referenceImage
-      ? "Keep the product (first reference image) identifiable and consistent."
-      : "",
-    mascotImage
-      ? "Keep the mascot character (reference image) design identical across scenes."
+      ? "The first supplied image is the product — keep it identifiable and consistent in the scene."
       : "",
     `Scene: ${scene}`,
-    "Vertical portrait 9:16 (720×1280). No text overlays, no logos, no watermarks. One image. PG-rated, brand-safe.",
+    project.product_name ? `Featured product: ${project.product_name}.` : "",
+    `Style and lighting: ${renderStyle}`,
+    "Vertical portrait 9:16 (720×1280). No text overlays, no logos, no watermarks. One image. PG-rated, brand-safe, no real people, no copyrighted characters.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -422,7 +438,8 @@ async function generateOneImage(args: {
     mascotImage,
   } = args;
 
-  // Microscopic beats are pure mechanism CGI — no character. Skip the mascot.
+  // Every image features the mascot. Microscopic beats drop the product photo
+  // (abstract macro scene) but keep the character as a cameo.
   const beatType =
     (beat.meta as { type?: string } | null)?.type === "microscopic"
       ? "microscopic"
@@ -453,6 +470,7 @@ async function generateOneImage(args: {
             projectId,
             project,
             beat,
+            beatType,
             referenceImage,
             mascotImage,
           })
@@ -466,7 +484,7 @@ async function generateOneImage(args: {
             },
             beatType,
             referenceImage: beatType === "microscopic" ? null : referenceImage,
-            mascotImage: beatType === "microscopic" ? null : mascotImage,
+            mascotImage,
           });
 
     const ext = mimeType.split("/")[1] ?? "png";
