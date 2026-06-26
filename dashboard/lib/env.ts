@@ -11,10 +11,26 @@ const schema = z.object({
   ELEVENLABS_API_KEY: z.string().min(1).optional(),
   ELEVENLABS_VOICE_ID: z.string().min(1).default("JBFqnCBsd6RMkjVDRZzb"),
   GOOGLE_API_KEY: z.string().min(1).optional(),
-  // Veo model + clip length. Defaults to the cheapest current image-to-video
-  // model. Override to "veo-3.0-generate-001" for higher quality at ~2x cost.
+  // Veo model + clip length. Used only when VIDEO_PROVIDER === "google-veo".
   VEO_MODEL: z.string().min(1).default("veo-3.0-fast-generate-001"),
   VEO_DURATION_SECONDS: z.coerce.number().int().min(4).max(8).default(4),
+
+  // Video clip provider for Step 6. "replicate-ltx" is the default — cheap
+  // (~$0.05/clip), no rate-limit cliff. "google-veo" hits Google AI Studio's
+  // Veo 3 Fast (higher quality but 2 RPM / 9 RPD on the free key).
+  VIDEO_PROVIDER: z
+    .enum(["replicate-kling", "replicate-ltx", "google-veo"])
+    .default("replicate-kling"),
+  REPLICATE_API_TOKEN: z.string().min(1).optional(),
+  // Community model on Replicate, so we must pin a `version` hash —
+  // the `/v1/models/owner/name/predictions` endpoint only works for official
+  // models. Format: `owner/name:version`.
+  REPLICATE_LTX_MODEL: z
+    .string()
+    .min(1)
+    .default(
+      "lightricks/ltx-video:8c47da666861d081eeb4d1261853087de23923a268a69b63febdf5dc1dee08e4",
+    ),
 });
 
 const parsed = schema.safeParse({
@@ -28,6 +44,9 @@ const parsed = schema.safeParse({
   GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
   VEO_MODEL: process.env.VEO_MODEL,
   VEO_DURATION_SECONDS: process.env.VEO_DURATION_SECONDS,
+  VIDEO_PROVIDER: process.env.VIDEO_PROVIDER,
+  REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN,
+  REPLICATE_LTX_MODEL: process.env.REPLICATE_LTX_MODEL,
 });
 
 if (!parsed.success) {

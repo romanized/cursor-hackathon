@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createService } from "@/lib/supabase/service";
-import { generateVideoFromImage } from "@/lib/providers/google";
+import { generateVideoFromImage } from "@/lib/providers/video";
 import type { TablesInsert } from "@/lib/db";
 
 async function requireUser() {
@@ -78,7 +78,7 @@ export async function generateMotionClips(projectId: string) {
       supabase,
       userId: user.id,
       projectId,
-      img: { id: img.id, beat_id: img.beat_id!, storage_path: img.storage_path! },
+      img: { id: img.id, beat_id: img.beat_id!, storage_path: img.storage_path!, url: img.url },
       beat: beats?.find((b) => b.id === img.beat_id) ?? null,
     })),
   );
@@ -111,7 +111,7 @@ async function generateOneClip(args: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string;
   projectId: string;
-  img: { id: string; beat_id: string; storage_path: string };
+  img: { id: string; beat_id: string; storage_path: string; url: string | null };
   beat: { visual_prompt: string | null; text: string } | null;
 }) {
   const { svc, supabase, userId, projectId, img, beat } = args;
@@ -123,7 +123,7 @@ async function generateOneClip(args: {
       beat_id: img.beat_id,
       kind: "clip",
       status: "processing",
-      provider: "google:veo-3-fast",
+      provider: `video:${process.env.VIDEO_PROVIDER ?? "replicate-ltx"}`,
       meta: { source_image: img.id } as never,
     } satisfies TablesInsert<"assets">)
     .select("id")
@@ -131,9 +131,13 @@ async function generateOneClip(args: {
   if (insErr || !assetRow) throw insErr ?? new Error("insert failed");
 
   try {
+    // We pull bytes (needed for Veo) AND keep the signed URL (used by LTX).
+    // Always-fresh signed URL so a stale row doesn't trip the remote fetch.
     const { data: imgBlob, error: dlErr } = await svc.storage.from("media").download(img.storage_path);
     if (dlErr || !imgBlob) throw dlErr ?? new Error("could not download source image");
     const imageBytes = Buffer.from(await imgBlob.arrayBuffer());
+    const { data: signedSrc } = await svc.storage.from("media").createSignedUrl(img.storage_path, 60 * 60);
+    const imageUrl = signedSrc?.signedUrl ?? img.url ?? "";
 
     const motionPrompt = [
       beat?.visual_prompt || beat?.text || "Subtle product motion",
@@ -141,6 +145,7 @@ async function generateOneClip(args: {
     ].join(" ");
 
     const { bytes, mimeType } = await generateVideoFromImage({
+      imageUrl,
       imageBytes,
       imageMimeType: imgBlob.type || "image/png",
       prompt: motionPrompt,

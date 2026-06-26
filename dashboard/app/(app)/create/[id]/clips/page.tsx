@@ -1,6 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { Accent } from "@/components/accent";
+import { env } from "@/lib/env";
 import { ClipsPanel } from "./clips-panel";
+
+const VIDEO_PROVIDER_LABEL: Record<typeof env.VIDEO_PROVIDER, string> = {
+  "replicate-kling": "Kling 2.1",
+  "replicate-ltx": "LTX-Video",
+  "google-veo": "Veo 3 Fast",
+};
 
 // Veo image-to-video is long-running (~60s per beat). Allow up to 10 minutes
 // for the full set of beats so the server action doesn't time out on Vercel.
@@ -33,7 +40,7 @@ export default async function ClipsStep({ params }: { params: Promise<{ id: stri
           Animate the <Accent>beats.</Accent>
         </h1>
         <p className="text-muted max-w-xl">
-          Each beat&apos;s image becomes a real 4-second motion clip via Veo 3 Fast. Falls back to still images if Veo is over budget or fails.
+          Each beat&apos;s image becomes a real motion clip via {VIDEO_PROVIDER_LABEL[env.VIDEO_PROVIDER]}. Falls back to still images if the model is over budget or fails.
         </p>
       </header>
 
@@ -41,6 +48,7 @@ export default async function ClipsStep({ params }: { params: Promise<{ id: stri
         projectId={id}
         imageCount={images?.length ?? 0}
         clips={clips ?? []}
+        provider={env.VIDEO_PROVIDER}
       />
     </div>
   );

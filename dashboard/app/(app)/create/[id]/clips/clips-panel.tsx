@@ -11,15 +11,33 @@ import { advanceTo } from "@/lib/actions/projects";
 import { useAssetsRealtime, type RealtimeAsset } from "@/lib/hooks/use-assets-realtime";
 
 type Clip = RealtimeAsset;
+type VideoProvider = "replicate-kling" | "replicate-ltx" | "google-veo";
+
+const PROVIDER_COPY: Record<VideoProvider, { label: string; blurb: string }> = {
+  "replicate-kling": {
+    label: "Generate motion clips with Kling 2.1",
+    blurb: "Kling v2.1 Standard on Replicate, vertical 9:16, 720p / 24fps, 5s per clip. Each clip costs ~$0.25; renders take ~1–3 min per beat. Free Replicate tier (<$5 credit) is throttled to 6 RPM, so beats render sequentially.",
+  },
+  "replicate-ltx": {
+    label: "Generate motion clips with LTX-Video",
+    blurb: "LTX-Video on Replicate, vertical 9:16, ~5s per clip. Cheap (~$0.05) and fast (~50s/beat) but visibly lower fidelity.",
+  },
+  "google-veo": {
+    label: "Generate motion clips with Veo",
+    blurb: "Veo 3 Fast image-to-video, vertical 9:16, ~4s per clip. Each clip costs ~$0.50–$1; ~60s per beat. Free key is rate-limited to 2 RPM / 9 RPD.",
+  },
+};
 
 export function ClipsPanel({
   projectId,
   imageCount,
   clips: initialClips,
+  provider,
 }: {
   projectId: string;
   imageCount: number;
   clips: Clip[];
+  provider: VideoProvider;
 }) {
   const router = useRouter();
   const clips = useAssetsRealtime<Clip>(projectId, "clip", initialClips);
@@ -68,7 +86,7 @@ export function ClipsPanel({
             }
           >
             <HugeiconsIcon icon={SparklesIcon} size={18} strokeWidth={1.5} />
-            {veoPending ? `Rendering with Veo… (~1min / clip)` : `Generate motion clips with Veo`}
+            {veoPending ? `Rendering…` : PROVIDER_COPY[provider].label}
           </Button>
 
           <Button
@@ -105,9 +123,7 @@ export function ClipsPanel({
         </div>
 
         {error && <p className="text-sm text-[var(--color-accent-soft)]">{error}</p>}
-        <p className="text-xs text-faint">
-          Veo 3 Fast image-to-video, vertical 9:16, ~4s per clip, no audio (your voiceover plays over the top). Each clip costs ~$0.50–$1; first render can take 30–90s per beat.
-        </p>
+        <p className="text-xs text-faint">{PROVIDER_COPY[provider].blurb}</p>
       </Card>
 
       {sorted.length > 0 && (
