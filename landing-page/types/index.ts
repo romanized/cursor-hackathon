@@ -11,14 +11,14 @@
  * The canonical, ORDERED set of section ids. This union is load-bearing: it is
  * the registry key in `app/page.tsx` (`Record<SectionId, …>` makes the island
  * map exhaustive) and every section's DOM `id` / anchor target. Order mirrors
- * scroll order: hero -> sneak-peek -> render-pin -> pipeline -> features -> cta
+ * scroll order: hero -> sneak-peek -> how-it-works -> result -> features -> cta
  * -> footer.
  */
 export type SectionId =
   | "hero"
   | "sneak-peek"
-  | "render-pin"
-  | "pipeline"
+  | "how-it-works"
+  | "result"
   | "features"
   | "cta"
   | "footer";

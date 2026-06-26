@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils/cn";
  * the look; later, the inner stage can be swapped for a `<video>` without
  * touching the frame.
  *
- * ACCENT LOCK: this primitive carries ZERO lime and ZERO cobalt. Every treatment
+ * ACCENT LOCK: this primitive carries ZERO accent. Every treatment
  * is built from bg / surface / surface-2, hairline / hairline-strong, fg / muted
  * and white-alpha glows only — so the reel can scatter dozens of these without
- * ever spending one of the three locked accent uses. (Cobalt is Pipeline-only.)
+ * ever spending one of the locked accent uses.
  *
  * Purely presentational + GSAP-free: the Hero island positions and animates the
  * card via transforms on the wrapper it renders this into.

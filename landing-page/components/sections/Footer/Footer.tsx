@@ -31,8 +31,8 @@ const FOOTER_COLUMNS: readonly FooterColumn[] = [
   {
     heading: "Product",
     links: [
-      { label: "Render room", href: "#render-pin" },
-      { label: "Pipeline", href: "#pipeline" },
+      { label: "How it works", href: "#how-it-works" },
+      { label: "The result", href: "#result" },
       { label: "Features", href: "#features" },
       { label: "Pricing", href: "#cta" },
       { label: "Changelog", href: "#cta" },

@@ -5,8 +5,8 @@ import { Cta } from "@/components/sections/Cta";
 import { Features } from "@/components/sections/Features";
 import { Footer } from "@/components/sections/Footer";
 import { Hero } from "@/components/sections/Hero";
-import { Pipeline } from "@/components/sections/Pipeline";
-import { RenderPin } from "@/components/sections/RenderPin";
+import { HowItWorks } from "@/components/sections/HowItWorks";
+import { Result } from "@/components/sections/Result";
 import { SneakPeek } from "@/components/sections/SneakPeek";
 
 /**
@@ -24,8 +24,8 @@ import { SneakPeek } from "@/components/sections/SneakPeek";
 const SECTION_ISLANDS = {
   hero: Hero,
   "sneak-peek": SneakPeek,
-  "render-pin": RenderPin,
-  pipeline: Pipeline,
+  "how-it-works": HowItWorks,
+  result: Result,
   features: Features,
   cta: Cta,
   footer: Footer,

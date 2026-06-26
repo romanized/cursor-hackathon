@@ -28,8 +28,8 @@ import { cn } from "@/lib/utils/cn";
  * The element is decorative (`aria-hidden`, `tabIndex={-1}`) and found via
  * `data-reel-video`; the wrapper via `data-card-id` (set by the caller).
  *
- * ACCENT LOCK: ZERO lime, ZERO cobalt — hairline / surface / shadow + render-grain
- * only, exactly like AdCard, so a field of these never spends a locked accent use.
+ * ACCENT LOCK: ZERO accent — hairline / surface / shadow + render-grain only,
+ * exactly like AdCard, so a field of these never spends a locked accent use.
  */
 export interface VideoCardProps {
   /** Public path to the clip, e.g. `/videos/skeleton_1.mp4`. */

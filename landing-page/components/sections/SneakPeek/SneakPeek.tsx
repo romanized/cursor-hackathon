@@ -25,8 +25,7 @@ import {
  * is DELIBERATELY different from the landing page's Studio Black + lime. That
  * palette (and the Bricolage / Instrument-Serif type) is scoped to the panel via
  * the `.hookm-demo` wrapper's local CSS vars + arbitrary Tailwind values, so the
- * red NEVER leaks into the landing chrome (hero CTA + progress hairline stay lime;
- * cobalt stays Pipeline-only).
+ * red NEVER leaks into the landing chrome (hero CTA + progress hairline stay lime).
  *
  * Its signature is a seamless rounded panel-top TEASER that peeks above the fold
  * at the BOTTOM of the hero viewport FROM PAGE LOAD — before any scroll. The

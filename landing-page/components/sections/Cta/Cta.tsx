@@ -36,7 +36,7 @@ const META = SECTIONS.find((s) => s.id === "cta");
  * lime uses (counts as the same "primary CTA" use as the hero). The button is
  * magnetic — a pointer-driven transform via `contextSafe`. Everything else is
  * token-neutral; the only other lime on this section is the REC dot in
- * `RecBadge`. Audited: no accent leak, no cobalt (Pipeline only), no purple.
+ * `RecBadge`. Audited: no accent leak, no purple.
  */
 export function Cta({ id, className }: SectionProps) {
   const sectionRef = useRef<HTMLElement | null>(null);

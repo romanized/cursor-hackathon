@@ -29,8 +29,8 @@ export const SITE = {
  * to these targets.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
-  { label: "Render", href: "#render-pin" },
-  { label: "Pipeline", href: "#pipeline" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "Result", href: "#result" },
   { label: "Features", href: "#features" },
   { label: "Start", href: "#cta" },
 ] as const;
@@ -40,14 +40,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
  * which also mirrors scroll order — important so ScrollTrigger instances are
  * created in page order (correct pin-spacing + refresh behavior).
  *
- * Order is load-bearing: hero -> sneak-peek -> render-pin -> pipeline -> features
+ * Order is load-bearing: hero -> sneak-peek -> how-it-works -> result -> features
  * -> cta -> footer.
  */
 export const SECTIONS: readonly SectionMeta[] = [
   { id: "hero", name: "Hero", eyebrow: "Live render" },
   { id: "sneak-peek", name: "Sneak peek", eyebrow: "Inside the studio" },
-  { id: "render-pin", name: "Raw to ad", eyebrow: "The transformation" },
-  { id: "pipeline", name: "How it works", eyebrow: "The pipeline" },
+  { id: "how-it-works", name: "How it works", eyebrow: "The flow" },
+  { id: "result", name: "The result", eyebrow: "The output" },
   { id: "features", name: "Features", eyebrow: "Inside the suite" },
   { id: "cta", name: "Get started", eyebrow: "Your first render" },
   { id: "footer", name: "Footer" },

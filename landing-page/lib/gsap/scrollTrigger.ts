@@ -38,9 +38,9 @@ export const SCRUB_DEFAULTS = {
 } as const satisfies Partial<ScrollTriggerVars>;
 
 /**
- * Pinned scrub scenes (e.g. the render-pin transformation). Pins the trigger
- * through a long scroll range while a scrubbed timeline plays. Animate CHILDREN,
- * never the pinned element itself.
+ * Pinned scrub scenes (a section pinned while a scrubbed timeline plays). Pins
+ * the trigger through a long scroll range. Animate CHILDREN, never the pinned
+ * element itself.
  */
 export const PIN_DEFAULTS = {
   start: "top top",

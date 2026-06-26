@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils/cn";
  * A titlebar (three hairline traffic-light dots + an optional mono title and
  * trailing slot) over a bordered surface body. Purely presentational and
  * token-styled: no GSAP, no business logic, no accent colour — so the locked
- * lime three-use rule and the Pipeline-only cobalt rule are never violated here.
- * Sections compose it; the Pipeline section docks three of these onto its spine.
+ * lime accent rule is never violated here. A design-system primitive sections
+ * can compose for faux-OS "render suite" panels.
  */
 export interface WindowChromeProps {
   /** Mono title shown in the titlebar (e.g. a file path or app name). */

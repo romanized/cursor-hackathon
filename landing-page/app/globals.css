@@ -20,9 +20,8 @@
   --color-hairline: rgba(255, 255, 255, 0.08);
   --color-hairline-strong: rgba(255, 255, 255, 0.14);
 
-  /* Locked accents: lime is the ONLY CTA/progress accent; cobalt is Pipeline-only. */
+  /* Locked accent: lime is the ONLY CTA/progress accent. */
   --color-accent: #c6f24e;
-  --color-accent-cobalt: #1f6cf0;
 
   /* Radii. */
   --radius-frame: 1.5rem;

@@ -45,7 +45,7 @@ import { buildReelScene, applyReelStaticState, REEL } from "./Hero.animation";
  * treatment — a dark button with a lime outline, lime label, and a subtle lime glow
  * rather than a glaring neon fill — so it reads premium while staying the one bold
  * lime moment. The nav carries ZERO lime (its "Start rendering" button is the muted
- * ghost variant). The five video cards carry zero lime, zero cobalt.
+ * ghost variant). The five video cards carry zero accent.
  */
 export function Hero({ id, className }: SectionProps) {
   const scopeRef = useRef<HTMLElement>(null);
@@ -320,7 +320,7 @@ function HeroBlock() {
         <Button
           size="lg"
           variant="ghost"
-          onClick={() => scrollToAnchor("#pipeline")}
+          onClick={() => scrollToAnchor("#how-it-works")}
         >
           See how it works
         </Button>
@@ -407,9 +407,9 @@ function HeadlineSwap() {
  * the pinned canvas (z-50) so the pin never clips it. Anchor links go through Lenis.
  */
 const NAV_LINKS = [
-  { label: "How it works", href: "#pipeline" },
+  { label: "How it works", href: "#how-it-works" },
   { label: "Features", href: "#features" },
-  { label: "Render", href: "#render-pin" },
+  { label: "The result", href: "#result" },
 ] as const;
 
 function HeroNav() {
